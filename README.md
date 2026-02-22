@@ -255,6 +255,13 @@ v1.2 — Detalhes da receita + correções de navegação
 ├── Correção: botão voltar do sistema na lista de receitas voltava ao menu em vez de fechar o app
 └── Correção: modo "Comer fora" não resetava selectedMode, bloqueando buscas subsequentes
 
+v1.4 — Correções de acessibilidade e legibilidade na tela de detalhes
+├── Subtítulos "Toque para marcar" e "Toque em um passo" agora legíveis (alpha removido)
+├── Cards de ingredientes e modo de preparo trocados para branco puro com elevation 1dp
+├── Interior dos cards usa Surface0 (creme suave) criando separação visual sutil das linhas
+├── Bolha do número do passo: fundo Green.copy(alpha=0.15f) garante contraste adequado
+└── IngredientRow: fundo desmarcado transparente alinhado ao novo fundo Surface0 do card
+
 v1.3 — Expansão de queries + card de destaque visual
 ├── GPT classifica o termo antes de buscar: genérico ou específico
 ├── Busca genérica (ex: "pastel") gera até 5 variações e busca em paralelo no TudoGostoso

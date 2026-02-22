@@ -353,10 +353,8 @@ fun IngredientsCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(Spacing.md)) {
 
@@ -393,7 +391,7 @@ fun IngredientsCard(
                     Text(
                         "Toque para marcar o que já tem",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = InkLight.copy(alpha = 0.7f)
+                            color = InkLight
                         )
                     )
                 }
@@ -419,7 +417,7 @@ fun IngredientsCard(
             // ── Lista de ingredientes ───────────────────────────────────
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color.White,
+                color = Surface0,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp
             ) {
@@ -490,7 +488,7 @@ fun IngredientsCard(
 @Composable
 fun IngredientRow(ingredient: String, isChecked: Boolean, onClick: () -> Unit) {
     val bgColor by animateColorAsState(
-        targetValue = if (isChecked) GreenSurface.copy(alpha = 0.6f) else Color.White,
+        targetValue = if (isChecked) GreenSurface.copy(alpha = 0.6f) else Color.Transparent,
         animationSpec = tween(250), label = "ingredientBg"
     )
     val textAlpha by animateFloatAsState(
@@ -565,10 +563,8 @@ fun StepsTimelineCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(Spacing.md)) {
 
@@ -595,7 +591,7 @@ fun StepsTimelineCard(
                     Text(
                         "Toque em um passo para destacar",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = InkLight.copy(alpha = 0.7f)
+                            color = InkLight
                         )
                     )
                 }
@@ -606,7 +602,7 @@ fun StepsTimelineCard(
             // ── Timeline de passos ──────────────────────────────────────
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color.White,
+                color = Surface0,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp
             ) {
@@ -639,7 +635,7 @@ fun StepTimelineItem(
         animationSpec = tween(220), label = "stepBg"
     )
     val bubbleBg by animateColorAsState(
-        targetValue = if (isSelected) Green else GreenSurface,
+        targetValue = if (isSelected) Green else Green.copy(alpha = 0.15f),
         animationSpec = tween(220), label = "bubbleBg"
     )
     val bubbleTextColor by animateColorAsState(
