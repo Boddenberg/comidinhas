@@ -1,0 +1,31 @@
+package br.com.boddenb.comidinhas.core.config
+
+/**
+ * ⚠️ ESTE É UM TEMPLATE!
+ *
+ * Para usar:
+ * 1. Copie este arquivo para: AwsConfig.kt
+ * 2. Substitua os valores com suas credenciais AWS
+ * 3. NÃO commite o arquivo AwsConfig.kt (está no .gitignore)
+ *
+ * Como obter suas credenciais:
+ * 1. Console AWS → IAM → Usuários
+ * 2. Criar usuário: comidinhas-app-user
+ * 3. Permissões: AmazonDynamoDBFullAccess + AmazonS3FullAccess
+ * 4. Copiar Access Key ID e Secret Access Key
+ */
+
+object AwsConfig {
+    const val REGION = "us-east-1"
+    const val ACCESS_KEY_ID = "COLE_SUA_ACCESS_KEY_AQUI"
+    const val SECRET_ACCESS_KEY = "COLE_SUA_SECRET_KEY_AQUI"
+
+    // DynamoDB Tables
+    const val TEAMS_TABLE = "Teams"
+    const val RECIPES_TABLE = "Comidinhas_Recipes"
+
+    // S3 Buckets
+    const val USER_PHOTOS_BUCKET = "basedotime-user-photos"
+    const val RECIPE_IMAGES_BUCKET = "comidinhas-recipe-images"
+}
+

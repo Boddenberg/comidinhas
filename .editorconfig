@@ -1,0 +1,42 @@
+# EditorConfig - Previne BOM e padroniza formatação
+# https://editorconfig.org
+
+root = true
+
+# Padrões para TODOS os arquivos
+[*]
+charset = utf-8                 # UTF-8 SEM BOM
+end_of_line = lf                # Line endings Unix (LF)
+insert_final_newline = true     # Adiciona newline no final
+trim_trailing_whitespace = true # Remove espaços no fim da linha
+
+# Arquivos Kotlin
+[*.kt]
+charset = utf-8                 # ⚠️ IMPORTANTE: UTF-8 SEM BOM
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# Arquivos Gradle
+[*.{gradle,gradle.kts}]
+charset = utf-8
+indent_style = space
+indent_size = 4
+
+# Arquivos XML (Android)
+[*.xml]
+charset = utf-8
+indent_style = space
+indent_size = 4
+
+# Arquivos JSON
+[*.json]
+charset = utf-8
+indent_style = space
+indent_size = 2
+
+# Arquivos Markdown
+[*.md]
+charset = utf-8
+trim_trailing_whitespace = false
+

@@ -1,0 +1,38 @@
+# Local properties (chaves, SDK path) - NUNCA commitar
+local.properties
+
+# Build outputs
+*.iml
+.gradle/
+/build/
+app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+/.idea/caches/
+/.idea/libraries/
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+
+# Credenciais AWS (legado)
+**/AwsConfig.kt
+app/src/main/java/br/com/boddenb/comidinhas/core/config/AwsConfig.kt
+
+# Keystore de assinatura
+*.jks
+*.keystore
+keystore.properties
+
+# Scripts de infraestrutura com dados sensíveis
+aws-iam-policy-recipes.json
+create-dynamodb-table.ps1
+setup_aws_recipes.ps1
+setup_aws_recipes.sh
+
+# Gradle wrapper jar (opcional - pesado)
+# gradle/wrapper/gradle-wrapper.jar
