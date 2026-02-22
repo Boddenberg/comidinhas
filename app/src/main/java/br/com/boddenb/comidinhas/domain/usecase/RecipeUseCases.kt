@@ -2,7 +2,7 @@ package br.com.boddenb.comidinhas.domain.usecase
 
 import android.graphics.Bitmap
 import br.com.boddenb.comidinhas.data.model.recipe.RecipeEntity
-import br.com.boddenb.comidinhas.data.repository.RecipeRepository
+import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
 import br.com.boddenb.comidinhas.domain.model.Recipe
 import java.util.UUID
 import javax.inject.Inject

@@ -23,7 +23,9 @@ data class HomeUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val showModeSelection: Boolean = false,
-    val selectedMode: SearchMode? = null
+    val selectedMode: SearchMode? = null,
+    val isGeneric: Boolean = false,
+    val featuredRecipeId: String? = null
 )
 
 @HiltViewModel
@@ -86,7 +88,15 @@ class HomeViewModel @Inject constructor(
                 }
 
                 val displayQuery = response.query.trim().replaceFirstChar { it.uppercase() }
-                _uiState.update { it.copy(isLoading = false, displayQuery = displayQuery, recipes = response.results) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        displayQuery = displayQuery,
+                        recipes = response.results,
+                        isGeneric = response.isGeneric,
+                        featuredRecipeId = response.featuredRecipeId
+                    )
+                }
 
                 saveRecipesAutomatically(response.results, query)
             } catch (e: Exception) {

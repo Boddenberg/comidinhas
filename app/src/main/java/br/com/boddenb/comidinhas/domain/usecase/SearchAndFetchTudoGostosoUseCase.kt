@@ -2,49 +2,36 @@ package br.com.boddenb.comidinhas.domain.usecase
 
 import br.com.boddenb.comidinhas.data.logger.AppLogger
 import br.com.boddenb.comidinhas.data.model.recipe.RecipeEntity
-import br.com.boddenb.comidinhas.data.repository.RecipeRepository
+import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
 import br.com.boddenb.comidinhas.data.scraper.CandidateRanker
 import br.com.boddenb.comidinhas.data.scraper.RecipeDetails
 import br.com.boddenb.comidinhas.data.scraper.RecipeLinkDiscovery
 import br.com.boddenb.comidinhas.data.scraper.TudoGostosoResult
 import br.com.boddenb.comidinhas.domain.model.RecipeItem
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.util.UUID
 import javax.inject.Inject
 
-/**
- * Fachada que orquestra:
- * 1. Busca de candidatos via discovery (Modo A ou B)
- * 2. Ranqueamento
- * 3. Extracao de detalhes do top candidato
- * 4. Persistencia no repositorio (cache Supabase)
- * 5. Retorno do RecipeItem para o ViewModel
- *
- * O discovery e injetado como interface, permitindo trocar Modo A/B sem alterar esta classe.
- */
 class SearchAndFetchTudoGostosoUseCase @Inject constructor(
     private val discovery: RecipeLinkDiscovery,
     private val extractor: br.com.boddenb.comidinhas.data.scraper.RecipeDetailExtractor,
     private val recipeRepository: RecipeRepository
 ) {
-    companion object {
-        private const val TAG = "TGUseCase"
-    }
 
     suspend fun execute(query: String): TudoGostosoResult {
         val normalized = query.lowercase().trim()
 
-        // 1. Descobre candidatos
         val candidates = discovery.discover(normalized)
         if (candidates.isEmpty()) {
             AppLogger.tgNotFound(normalized)
             return TudoGostosoResult.NotFound(normalized)
         }
 
-        // 2. Ranqueia e pega top 3
         val ranked = CandidateRanker.rank(candidates, topN = 3)
         AppLogger.tgCandidates(ranked.map { "'${it.candidate.title}' | ${it.reason}" })
 
-        // 3. Extrai detalhes do top 1
         val top = ranked.first()
         AppLogger.tgExtracting(top.candidate.url)
         val details = extractor.extract(top.candidate.url)
@@ -59,11 +46,31 @@ class SearchAndFetchTudoGostosoUseCase @Inject constructor(
         }
 
         AppLogger.tgSuccess(details.title, details.imageUrl, details.ingredients.size, details.steps.size)
-
-        // 4. Persiste no repositório em background
         saveToRepository(details, normalized)
 
         return TudoGostosoResult.Success(details = details, topCandidates = ranked)
+    }
+
+    /**
+     * Busca múltiplas variações em paralelo e retorna todas as que tiveram sucesso,
+     * deduplicando por nome normalizado.
+     */
+    suspend fun executeMultiple(variations: List<String>): List<RecipeDetails> = coroutineScope {
+        AppLogger.d(AppLogger.TUDO_GOSTOSO, "┌─ TG MULTI: ${variations.size} variações → ${variations.joinToString(", ")}")
+
+        val deferred = variations.map { variation ->
+            async {
+                runCatching { execute(variation) }.getOrNull()
+            }
+        }
+
+        val results = deferred.awaitAll()
+            .filterIsInstance<TudoGostosoResult.Success>()
+            .map { it.details }
+            .distinctBy { it.title.lowercase().trim() }
+
+        AppLogger.d(AppLogger.TUDO_GOSTOSO, "└─ TG MULTI: ${results.size} receitas encontradas de ${variations.size} variações")
+        results
     }
 
     fun toRecipeItem(details: RecipeDetails): RecipeItem {
@@ -103,4 +110,8 @@ class SearchAndFetchTudoGostosoUseCase @Inject constructor(
         }
     }
 }
+
+
+
+
 

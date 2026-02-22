@@ -73,22 +73,27 @@ app/
 ## Fluxo de busca
 
 ```
-Usuário digita "lasanha a bolonhesa"
+Usuário digita "pastel"
         │
         ▼
   1. Cache em memória?  ──► Sim → retorna instantâneo
         │ Não
         ▼
-  2. Supabase (comidinhas-recipe)?  ──► Sim → retorna receitas salvas
-        │ Não
+  2. GPT classifica o termo
+     • genérico ("pastel") → gera variações: pastel de queijo, pastel de carne, ...
+     • específico ("pastel de carne") → mantém + sugere similares
+        │
         ▼
-  3. Tabela term_corrections?  ──► Encontrou "lasanhe" → "lasanha"?
-        │                             └─► Busca novamente no Supabase
+  3. Supabase (comidinhas-recipe)
+     • busca pelo termo original
+     • se genérico: busca pelo raiz (pesca todos os sabores salvos)
+     • se não achou: tenta correção via term_corrections + nova busca
+        │ Não encontrou
         ▼
-  4. TudoGostoso scraping
-     • Busca interna do site
-     • Rankeia por nota × avaliações
-     • Extrai JSON-LD ou HTML
+  4. TudoGostoso scraping (em paralelo para todas as variações)
+     • busca interna do site
+     • rankeia por nota × avaliações
+     • extrai JSON-LD ou HTML
         │ Não encontrou
         ▼
   5. Valida termo com GPT-4o-mini
@@ -101,7 +106,9 @@ Usuário digita "lasanha a bolonhesa"
   Busca imagem (Brave Search → Unsplash fallback)
         │
         ▼
-  Salva no Supabase + retorna para o usuário
+  Salva no Supabase + retorna lista para o usuário
+  • busca específica: primeiro card com efeito visual de destaque
+  • busca genérica: lista uniforme com seção "você pode gostar também"
 ```
 
 ---
@@ -247,6 +254,16 @@ v1.2 — Detalhes da receita + correções de navegação
 ├── Tokens de espaçamento centralizados em Spacing.kt
 ├── Correção: botão voltar do sistema na lista de receitas voltava ao menu em vez de fechar o app
 └── Correção: modo "Comer fora" não resetava selectedMode, bloqueando buscas subsequentes
+
+v1.3 — Expansão de queries + card de destaque visual
+├── GPT classifica o termo antes de buscar: genérico ou específico
+├── Busca genérica (ex: "pastel") gera até 5 variações e busca em paralelo no TudoGostoso
+├── Busca específica (ex: "pastel de carne") destaca o resultado principal na lista
+├── Supabase busca pelo termo raiz genérico para pescar sabores já salvos
+├── Card de destaque: borda brilhante animada (sweep gradient laranja/dourado), imagem maior (280dp) e "Ver receita →"
+├── Cards normais mantêm visual neutro, criando contraste natural com o destaque
+├── Hilt: corrigido resolução de RecipeRepository — substituído typealias por import direto do tipo real
+└── SearchRecipesUseCase: removida classe duplicada e comentários em excesso
 ```
 
 ---

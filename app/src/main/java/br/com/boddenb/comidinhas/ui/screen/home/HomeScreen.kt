@@ -530,13 +530,78 @@ fun HomeScreen(
                             }
                         }
                         uiState.recipes.isNotEmpty() -> {
+                            val featuredId = uiState.featuredRecipeId
+                            val isGeneric = uiState.isGeneric
+                            val featured = if (!isGeneric && featuredId != null)
+                                uiState.recipes.firstOrNull { it.id == featuredId }
+                            else null
+                            val others = uiState.recipes.filter { it.id != featured?.id }
+
                             LazyColumn(
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                itemsIndexed(uiState.recipes) { index, recipe ->
+                                // Receita destaque (busca específica)
+                                if (featured != null) {
+                                    item {
+                                        var visible by remember { mutableStateOf(false) }
+                                        LaunchedEffect(Unit) { delay(60); visible = true }
+                                        AnimatedVisibility(
+                                            visible = visible,
+                                            enter = fadeIn(tween(300)) + slideInVertically(
+                                                initialOffsetY = { it / 4 },
+                                                animationSpec = tween(300, easing = EaseOutQuart)
+                                            )
+                                        ) {
+                                            RecipeCard(
+                                                recipe = featured,
+                                                onClick = { onRecipeClick(featured) },
+                                                isFeatured = true
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Separador com label
+                                if (others.isNotEmpty()) {
+                                    item {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = if (featured != null) 4.dp else 0.dp, bottom = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (featured != null) {
+                                                Box(Modifier.size(4.dp).background(Brand, CircleShape))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    "VOCÊ PODE GOSTAR TAMBÉM",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = InkLight,
+                                                    letterSpacing = 1.5.sp
+                                                )
+                                            } else {
+                                                Box(Modifier.size(4.dp).background(Brand, CircleShape))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    "${others.size} RECEITAS ENCONTRADAS",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = InkLight,
+                                                    letterSpacing = 1.5.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                itemsIndexed(others) { index, recipe ->
                                     var visible by remember { mutableStateOf(false) }
-                                    LaunchedEffect(Unit) { delay(index * 60L); visible = true }
+                                    LaunchedEffect(Unit) {
+                                        delay((if (featured != null) 120L else 60L) + index * 60L)
+                                        visible = true
+                                    }
                                     AnimatedVisibility(
                                         visible = visible,
                                         enter = fadeIn(tween(250)) + slideInVertically(
@@ -547,6 +612,7 @@ fun HomeScreen(
                                         RecipeCard(recipe = recipe, onClick = { onRecipeClick(recipe) })
                                     }
                                 }
+
                                 item { Spacer(Modifier.height(24.dp)) }
                             }
                         }
@@ -747,7 +813,7 @@ fun AnimatedModeButton(emoji: String, title: String, subtitle: String, color: Co
 }
 
 @Composable
-fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
+fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit, isFeatured: Boolean = false) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -756,15 +822,153 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
         label = "cardScale"
     )
 
+    if (isFeatured) {
+        FeaturedRecipeCard(recipe = recipe, onClick = onClick, source = source, pressed = pressed, scale = scale)
+    } else {
+        RegularRecipeCard(recipe = recipe, onClick = onClick, source = source, pressed = pressed, scale = scale)
+    }
+}
+
+@Composable
+private fun FeaturedRecipeCard(
+    recipe: RecipeItem,
+    onClick: () -> Unit,
+    source: MutableInteractionSource,
+    pressed: Boolean,
+    scale: Float
+) {
+    val shimmerOffset by rememberInfiniteTransition(label = "shimmer").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart),
+        label = "shimmerOffset"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .shadow(
-                elevation = if (pressed) 1.dp else 3.dp,
-                shape = RoundedCornerShape(16.dp),
-                spotColor = Color.Black.copy(alpha = 0.08f)
-            )
+            .padding(2.dp)
+    ) {
+        // Fundo gradiente animado (brilho na borda)
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.sweepGradient(
+                        0f to Brand.copy(alpha = 0.0f),
+                        shimmerOffset * 0.5f to Brand.copy(alpha = 0.0f),
+                        shimmerOffset * 0.5f + 0.05f to Brand.copy(alpha = 0.9f),
+                        shimmerOffset * 0.5f + 0.10f to Color(0xFFFFD700).copy(alpha = 0.7f),
+                        shimmerOffset * 0.5f + 0.15f to Brand.copy(alpha = 0.0f),
+                        1f to Brand.copy(alpha = 0.0f)
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(2.dp)
+                .shadow(8.dp, RoundedCornerShape(18.dp), spotColor = Brand.copy(alpha = 0.25f))
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White)
+                .clickable(source, null) { onClick() }
+        ) {
+            Column {
+                Box(modifier = Modifier.fillMaxWidth().height(280.dp)) {
+                    if (!recipe.imageUrl.isNullOrEmpty()) {
+                        Image(
+                            painter = rememberAsyncImagePainter(recipe.imageUrl),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(Color(0xFFF5F0EB)),
+                            contentAlignment = Alignment.Center
+                        ) { Text("🍽️", fontSize = 64.sp) }
+                    }
+
+                    // Gradiente rico cobrindo boa parte da imagem
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.40f to Color.Transparent,
+                                0.75f to Color.Black.copy(alpha = 0.55f),
+                                1f to Color.Black.copy(alpha = 0.80f)
+                            )
+                        )
+                    )
+
+
+                    // Título e chips sobre a imagem
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomStart).padding(14.dp)
+                    ) {
+                        Text(
+                            recipe.name,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            maxLines = 2,
+                            lineHeight = 25.sp,
+                            overflow = TextOverflow.Ellipsis,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.5f),
+                                    offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                                    blurRadius = 8f
+                                )
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (!recipe.cookingTime.isNullOrEmpty()) BadgePill("⏱ ${recipe.cookingTime}")
+                            if (!recipe.servings.isNullOrEmpty()) BadgePill("🍽 ${recipe.servings}")
+                        }
+                    }
+                }
+
+                // Rodapé com chips de ingredientes/passos
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp, 12.dp, 14.dp, 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TagChip("🥘 ${recipe.ingredients.size} ingredientes", BrandSurface, BrandDark)
+                    TagChip("👨‍🍳 ${recipe.instructions.size} passos", GreenSurface, Green)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "Ver receita →",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Brand
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RegularRecipeCard(
+    recipe: RecipeItem,
+    onClick: () -> Unit,
+    source: MutableInteractionSource,
+    pressed: Boolean,
+    scale: Float
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .shadow(elevation = if (pressed) 1.dp else 3.dp, shape = RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.08f))
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
             .clickable(source, null) { onClick() }
@@ -780,19 +984,13 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
                     )
                 } else {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFFF5F0EB)),
+                        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F0EB)),
                         contentAlignment = Alignment.Center
                     ) { Text("🍽️", fontSize = 52.sp) }
                 }
                 Box(
                     modifier = Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.55f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.50f)
-                        )
+                        Brush.verticalGradient(0f to Color.Transparent, 0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.50f))
                     )
                 )
                 Row(
@@ -800,10 +998,9 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (!recipe.cookingTime.isNullOrEmpty()) BadgePill("⏱ ${recipe.cookingTime}")
-                    if (!recipe.servings.isNullOrEmpty())    BadgePill("🍽 ${recipe.servings}")
+                    if (!recipe.servings.isNullOrEmpty()) BadgePill("🍽 ${recipe.servings}")
                 }
             }
-
             Column(modifier = Modifier.padding(14.dp, 12.dp, 14.dp, 14.dp)) {
                 Text(
                     recipe.name,
@@ -816,8 +1013,8 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TagChip("🥘 ${recipe.ingredients.size} itens",   BrandSurface, BrandDark)
-                    TagChip("👨‍🍳 ${recipe.instructions.size} passos", GreenSurface,  Green)
+                    TagChip("🥘 ${recipe.ingredients.size} itens", BrandSurface, BrandDark)
+                    TagChip("👨‍🍳 ${recipe.instructions.size} passos", GreenSurface, Green)
                 }
                 if (recipe.ingredients.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
@@ -844,6 +1041,7 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
         }
     }
 }
+
 
 @Composable
 private fun BadgePill(text: String) {

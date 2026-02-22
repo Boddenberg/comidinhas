@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import br.com.boddenb.comidinhas.BuildConfig
 import br.com.boddenb.comidinhas.data.logger.AppLogger
 import br.com.boddenb.comidinhas.data.model.recipe.RecipeEntity
-import br.com.boddenb.comidinhas.data.repository.RecipeRepository
+import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.serialization.Serializable
 
 @Singleton
 class RecipeSupabaseRepository @Inject constructor(

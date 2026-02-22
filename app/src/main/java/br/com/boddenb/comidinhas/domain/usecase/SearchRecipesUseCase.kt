@@ -6,26 +6,12 @@ import br.com.boddenb.comidinhas.data.image.DallEImageGenerator
 import br.com.boddenb.comidinhas.data.logger.AppLogger
 import br.com.boddenb.comidinhas.data.model.recipe.RecipeEntity
 import br.com.boddenb.comidinhas.data.remote.OpenAiClient
-import br.com.boddenb.comidinhas.data.repository.RecipeRepository
-import br.com.boddenb.comidinhas.data.scraper.TudoGostosoResult
+import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
 import br.com.boddenb.comidinhas.data.util.fixEncoding
 import br.com.boddenb.comidinhas.domain.model.RecipeItem
 import br.com.boddenb.comidinhas.domain.model.RecipeSearchResponse
 import javax.inject.Inject
 
-/**
- * Orquestra o fluxo completo de busca de receitas.
- *
- * Ordem de prioridade:
- * 1. Cache em memória
- * 2. Supabase (receitas já salvas)
- * 3. Correção de termo + nova busca no Supabase
- * 4. TudoGostoso scraping
- * 5. Validação do termo (GPT-4o-mini)
- * 6. Geração via OpenAI GPT-4o
- *
- * O [OpenAiClient] passa a ser apenas um cliente HTTP para a OpenAI.
- */
 class SearchRecipesUseCase @Inject constructor(
     private val openAiClient: OpenAiClient,
     private val recipeRepository: RecipeRepository,
@@ -36,10 +22,8 @@ class SearchRecipesUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(query: String): RecipeSearchResponse {
         AppLogger.searchStart(query)
-
         val normalizedQuery = query.lowercase().trim()
 
-        // 1. Cache em memória
         cacheManager.get(normalizedQuery)?.let { cached ->
             AppLogger.cacheHit(normalizedQuery)
             AppLogger.searchEnd(normalizedQuery, "Cache em memória", cached.results.size)
@@ -47,42 +31,56 @@ class SearchRecipesUseCase @Inject constructor(
         }
         AppLogger.cacheMiss(normalizedQuery)
 
-        // 2. Supabase + correção de termos
-        val (foundRecipes, resolvedQuery) = searchSupabaseWithCorrection(normalizedQuery)
+        AppLogger.d(AppLogger.OPENAI, "┌─ EXPANSÃO DE QUERY: \"$normalizedQuery\"")
+        val expansion = openAiClient.expandQuery(normalizedQuery)
+        AppLogger.d(AppLogger.OPENAI, "│  genérico=${expansion.isGeneric} raiz=${expansion.genericTerm} variações=${expansion.variations}")
 
-        if (foundRecipes.isNotEmpty()) {
-            val response = buildResponseFromEntities(foundRecipes, resolvedQuery)
-            cacheManager.put(resolvedQuery, response)
-            AppLogger.cacheSave(resolvedQuery)
+        val (supabaseRecipes, resolvedQuery) = searchSupabaseWithExpansion(normalizedQuery, expansion)
+
+        if (supabaseRecipes.isNotEmpty()) {
+            val response = buildResponseFromEntities(
+                entities = supabaseRecipes,
+                query = resolvedQuery,
+                isGeneric = expansion.isGeneric,
+                featuredName = if (!expansion.isGeneric) normalizedQuery else null
+            )
+            cacheManager.put(normalizedQuery, response)
+            AppLogger.cacheSave(normalizedQuery)
             AppLogger.searchEnd(resolvedQuery, "Supabase", response.results.size)
             return response
         }
 
-        // 3. TudoGostoso
-        val tgResult = runCatching { tudoGostosoUseCase.execute(resolvedQuery) }.getOrNull()
-        when (tgResult) {
-            is TudoGostosoResult.Success -> {
-                val details = tgResult.details
-                AppLogger.tgSuccess(details.title, details.imageUrl, details.ingredients.size, details.steps.size)
-                val item = tudoGostosoUseCase.toRecipeItem(details).let { base ->
-                    if (base.imageUrl.isNullOrEmpty()) {
-                        AppLogger.imageStart(base.name, "fallback TudoGostoso")
-                        val url = imageGenerator.generateRecipeImage(base.name)
-                        AppLogger.imageFound("fallback", url.orEmpty().ifEmpty { "null" })
-                        base.copy(imageUrl = url)
-                    } else base
-                }
-                val response = RecipeSearchResponse(query = resolvedQuery, results = listOf(item))
-                cacheManager.put(resolvedQuery, response)
-                AppLogger.searchEnd(resolvedQuery, "TudoGostoso", 1)
-                return response
+        AppLogger.d(AppLogger.TUDO_GOSTOSO, "┌─ TG MULTI início: ${expansion.variations.size} variações")
+        val tgDetails = tudoGostosoUseCase.executeMultiple(expansion.variations)
+
+        if (tgDetails.isNotEmpty()) {
+            val items = tgDetails.map { details ->
+                val item = tudoGostosoUseCase.toRecipeItem(details)
+                if (item.imageUrl.isNullOrEmpty()) {
+                    AppLogger.imageStart(item.name, "fallback TudoGostoso")
+                    val url = imageGenerator.generateRecipeImage(item.name)
+                    AppLogger.imageFound("fallback", url.orEmpty().ifEmpty { "null" })
+                    item.copy(imageUrl = url)
+                } else item
             }
-            is TudoGostosoResult.NotFound -> AppLogger.tgNotFound(resolvedQuery)
-            is TudoGostosoResult.Error    -> AppLogger.tgError(tgResult.message)
-            null                          -> AppLogger.tgError("Exceção inesperada no TudoGostoso")
+
+            val featuredId = if (!expansion.isGeneric) {
+                items.firstOrNull { it.name.lowercase().contains(normalizedQuery) }?.id
+                    ?: items.firstOrNull()?.id
+            } else null
+
+            val response = RecipeSearchResponse(
+                query = resolvedQuery,
+                results = items,
+                isGeneric = expansion.isGeneric,
+                featuredRecipeId = featuredId
+            )
+            cacheManager.put(normalizedQuery, response)
+            AppLogger.cacheSave(normalizedQuery)
+            AppLogger.searchEnd(resolvedQuery, "TudoGostoso", items.size)
+            return response
         }
 
-        // 4. Validação do termo antes de chamar OpenAI
         AppLogger.validationStart(resolvedQuery)
         val validationResult = openAiClient.validateTerm(resolvedQuery)
         if (validationResult is OpenAiClient.TermValidationResult.Invalid) {
@@ -96,18 +94,18 @@ class SearchRecipesUseCase @Inject constructor(
         }
         AppLogger.validationValid(resolvedQuery)
 
-        // 5. Geração via OpenAI
         val response = openAiClient.generateRecipes(resolvedQuery)
-        cacheManager.put(resolvedQuery, response)
-        AppLogger.cacheSave(resolvedQuery)
-        AppLogger.searchEnd(resolvedQuery, "OpenAI", response.results.size)
-        return response
+        val finalResponse = response.copy(isGeneric = expansion.isGeneric)
+        cacheManager.put(normalizedQuery, finalResponse)
+        AppLogger.cacheSave(normalizedQuery)
+        AppLogger.searchEnd(resolvedQuery, "OpenAI", finalResponse.results.size)
+        return finalResponse
     }
 
-    private suspend fun searchSupabaseWithCorrection(
-        normalizedQuery: String
+    private suspend fun searchSupabaseWithExpansion(
+        normalizedQuery: String,
+        expansion: OpenAiClient.QueryExpansion
     ): Pair<List<RecipeEntity>, String> {
-        // Busca direta
         val direct = recipeRepository.getRecipesByQuery(normalizedQuery).getOrNull().orEmpty()
         if (direct.isNotEmpty()) {
             AppLogger.supabaseSearchFound(normalizedQuery, direct.size)
@@ -115,23 +113,36 @@ class SearchRecipesUseCase @Inject constructor(
         }
         AppLogger.supabaseSearchEmpty(normalizedQuery)
 
-        // Tenta correção de termo
+        val genericTerm = expansion.genericTerm?.lowercase()?.trim()
+        if (!genericTerm.isNullOrBlank() && genericTerm != normalizedQuery) {
+            AppLogger.d(AppLogger.SUPABASE, "│  🔎 Buscando pelo raiz genérico: \"$genericTerm\"")
+            val genericResults = recipeRepository.getRecipesByQuery(genericTerm).getOrNull().orEmpty()
+            if (genericResults.isNotEmpty()) {
+                AppLogger.supabaseSearchFound(genericTerm, genericResults.size)
+                return Pair(genericResults, genericTerm)
+            }
+            AppLogger.supabaseSearchEmpty(genericTerm)
+        }
+
         AppLogger.correctionStart(normalizedQuery)
         val corrected = termCorrectionService.correctTerm(normalizedQuery)
-        if (corrected == normalizedQuery) return Pair(emptyList(), normalizedQuery)
-
-        val correctedResult = recipeRepository.getRecipesByQuery(corrected).getOrNull().orEmpty()
-        if (correctedResult.isNotEmpty()) {
-            AppLogger.supabaseSearchFound(corrected, correctedResult.size)
-            return Pair(correctedResult, corrected)
+        if (corrected != normalizedQuery) {
+            val correctedResult = recipeRepository.getRecipesByQuery(corrected).getOrNull().orEmpty()
+            if (correctedResult.isNotEmpty()) {
+                AppLogger.supabaseSearchFound(corrected, correctedResult.size)
+                return Pair(correctedResult, corrected)
+            }
+            AppLogger.supabaseSearchEmpty(corrected)
         }
-        AppLogger.supabaseSearchEmpty(corrected)
-        return Pair(emptyList(), corrected)
+
+        return Pair(emptyList(), normalizedQuery)
     }
 
     private suspend fun buildResponseFromEntities(
         entities: List<RecipeEntity>,
-        query: String
+        query: String,
+        isGeneric: Boolean,
+        featuredName: String?
     ): RecipeSearchResponse {
         val unique = entities
             .distinctBy { it.id }
@@ -151,7 +162,21 @@ class SearchRecipesUseCase @Inject constructor(
                 servings = entity.servings
             )
         }
-        return RecipeSearchResponse(query = query, results = items)
+
+        val sorted = if (!isGeneric && featuredName != null) {
+            val featured = items.firstOrNull { it.name.lowercase().contains(featuredName) }
+            if (featured != null) listOf(featured) + items.filter { it.id != featured.id }
+            else items
+        } else items
+
+        val featuredId = if (!isGeneric) sorted.firstOrNull()?.id else null
+
+        return RecipeSearchResponse(
+            query = query,
+            results = sorted,
+            isGeneric = isGeneric,
+            featuredRecipeId = featuredId
+        )
     }
 
     private suspend fun resolveImageUrl(entity: RecipeEntity): String? {
@@ -173,4 +198,3 @@ class SearchRecipesUseCase @Inject constructor(
         return validDomains.any { url.contains(it) }
     }
 }
-

@@ -1,6 +1,6 @@
 package br.com.boddenb.comidinhas.di
 
-import br.com.boddenb.comidinhas.data.repository.RecipeRepository
+import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
 import br.com.boddenb.comidinhas.data.scraper.CompositeRecipeLinkDiscovery
 import br.com.boddenb.comidinhas.data.scraper.GoogleSearchDiscovery
 import br.com.boddenb.comidinhas.data.scraper.RecipeDetailExtractor

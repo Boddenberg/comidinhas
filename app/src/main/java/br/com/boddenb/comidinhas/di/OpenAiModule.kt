@@ -5,7 +5,7 @@ import br.com.boddenb.comidinhas.data.cache.RecipeCacheManager
 import br.com.boddenb.comidinhas.data.correction.TermCorrectionService
 import br.com.boddenb.comidinhas.data.image.DallEImageGenerator
 import br.com.boddenb.comidinhas.data.remote.OpenAiClient
-import br.com.boddenb.comidinhas.data.repository.RecipeRepository
+import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
 import br.com.boddenb.comidinhas.domain.usecase.SearchAndFetchTudoGostosoUseCase
 import br.com.boddenb.comidinhas.domain.usecase.SearchRecipesUseCase
 import dagger.Module

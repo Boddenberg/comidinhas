@@ -106,6 +106,75 @@ class OpenAiClient @Inject constructor(
         }
     }
 
+    // ── Expansão de query ────────────────────────────────────────────────────
+
+    data class QueryExpansion(
+        val isGeneric: Boolean,
+        val genericTerm: String?,
+        val variations: List<String>
+    )
+
+    /**
+     * Classifica se o termo é genérico (ex: "pastel") ou específico (ex: "pastel de carne").
+     * Se genérico, retorna até 5 variações para busca paralela.
+     * Se específico, retorna o próprio termo + até 4 similares como sugestões.
+     * Também retorna o termo genérico raiz para busca eficiente no Supabase.
+     */
+    suspend fun expandQuery(term: String): QueryExpansion {
+        return try {
+            val requestBody = buildJsonObject {
+                put("model", "gpt-4o-mini")
+                put("max_tokens", 200)
+                put("temperature", 0.3)
+                putJsonArray("messages") {
+                    addJsonObject {
+                        put("role", "system")
+                        put("content", """
+                            Você é um especialista culinário. Analise o termo e responda APENAS com JSON.
+
+                            Regras:
+                            - "isGeneric": true se o termo é um prato genérico sem especificação (ex: "pastel", "pizza", "bolo", "sushi")
+                            - "isGeneric": false se já tem especificação (ex: "pastel de carne", "pizza margherita", "bolo de cenoura")
+                            - "genericTerm": o termo genérico raiz do prato (ex: para "pastel de carne" → "pastel"; para "bolo de chocolate" → "bolo")
+                            - "variations": lista de até 5 nomes específicos do prato para buscar
+                              * Se genérico: variações populares (ex: "pastel" → ["pastel de queijo", "pastel de carne", "pastel de frango", "pastel de camarão", "pastel de quatro queijos"])
+                              * Se específico: o próprio termo primeiro, depois 4 similares (ex: "pastel de carne" → ["pastel de carne", "pastel de queijo", "pastel de frango", "pastel de palmito", "pastel de camarão"])
+
+                            Responda APENAS: {"isGeneric": bool, "genericTerm": "string", "variations": ["string"]}
+                        """.trimIndent())
+                    }
+                    addJsonObject { put("role", "user"); put("content", term) }
+                }
+            }
+
+            val response: HttpResponse = httpClient.post("chat/completions") {
+                setBody(requestBody)
+            }
+            val content = json.parseToJsonElement(response.bodyAsText()).jsonObject["choices"]
+                ?.jsonArray?.firstOrNull()
+                ?.jsonObject?.get("message")
+                ?.jsonObject?.get("content")
+                ?.jsonPrimitive?.content?.trim()
+
+            if (content != null) {
+                val obj = json.parseToJsonElement(content).jsonObject
+                val isGeneric = obj["isGeneric"]?.jsonPrimitive?.booleanOrNull ?: false
+                val genericTerm = obj["genericTerm"]?.jsonPrimitive?.contentOrNull
+                val variations = obj["variations"]?.jsonArray
+                    ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    ?.filter { it.isNotBlank() }
+                    ?: listOf(term)
+                AppLogger.d(AppLogger.OPENAI, "│  🔍 Expansão: genérico=$isGeneric termGenérico=$genericTerm variações=${variations.size}")
+                QueryExpansion(isGeneric = isGeneric, genericTerm = genericTerm, variations = variations)
+            } else {
+                QueryExpansion(isGeneric = false, genericTerm = null, variations = listOf(term))
+            }
+        } catch (e: Exception) {
+            AppLogger.d(AppLogger.OPENAI, "│  ⚠️ expandQuery falhou (${e.message}), usando termo original")
+            QueryExpansion(isGeneric = false, genericTerm = null, variations = listOf(term))
+        }
+    }
+
     // ── Geração de receitas ───────────────────────────────────────────────────
 
     /**

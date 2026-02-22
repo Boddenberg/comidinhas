@@ -9,7 +9,9 @@ data class RecipeSearchRequest(val query: String)
 data class RecipeSearchResponse(
     val query: String,
     val results: List<RecipeItem>,
-    val errorMessage: String? = null  // Mensagem de erro para termos inválidos
+    val errorMessage: String? = null,
+    val isGeneric: Boolean = false,
+    val featuredRecipeId: String? = null
 )
 
 @Serializable
