@@ -1,7 +1,7 @@
 package br.com.boddenb.comidinhas.data.cache
 
 import br.com.boddenb.comidinhas.domain.model.RecipeSearchResponse
-import java.text.Normalizer
+import br.com.boddenb.comidinhas.data.util.TextNormalizer
 import java.util.LinkedHashMap
 
 // Construction is provided by a Hilt module to avoid Hilt/Kapt issues
@@ -44,14 +44,12 @@ class RecipeCacheManager constructor(
         }
     }
 
+    @Suppress("unused")
     fun clear() {
         synchronized(cache) {
             cache.clear()
         }
     }
 
-    private fun normalizeQuery(query: String): String {
-        val normalized = Normalizer.normalize(query.trim().lowercase(), Normalizer.Form.NFD)
-        return Regex("\\p{InCombiningDiacriticalMarks}+").replace(normalized, "")
-    }
+    private fun normalizeQuery(query: String): String = TextNormalizer.normalize(query)
 }

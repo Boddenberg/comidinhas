@@ -9,9 +9,13 @@ import dagger.hilt.components.SingletonComponent
 import io.github.jan.supabase.SupabaseClient
 import javax.inject.Singleton
 
+/**
+ * Provê dependências de banco de dados (Supabase).
+ * Renomeado de AwsModule após migração para Supabase.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
-object AwsModule { // Mantido nome para evitar mexer em outros pontos
+object DatabaseModule {
 
     @Provides
     @Singleton

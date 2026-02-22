@@ -7,6 +7,7 @@ import br.com.boddenb.comidinhas.data.image.DallEImageGenerator
 import br.com.boddenb.comidinhas.data.remote.OpenAiClient
 import br.com.boddenb.comidinhas.data.repository.RecipeRepository
 import br.com.boddenb.comidinhas.domain.usecase.SearchAndFetchTudoGostosoUseCase
+import br.com.boddenb.comidinhas.domain.usecase.SearchRecipesUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -48,19 +49,14 @@ object OpenAiModule {
     @Singleton
     @OpenAiHttpClient
     fun provideOpenAiHttpClient(json: Json): HttpClient {
-        val apiKey = try {
-            BuildConfig.OPENAI_API_KEY
-        } catch (_: Exception) {
-            ""
-        }
-
+        val apiKey = try { BuildConfig.OPENAI_API_KEY } catch (_: Exception) { "" }
         return HttpClient(Android) {
             install(ContentNegotiation) { json(json) }
             install(Logging) { level = LogLevel.INFO }
             install(HttpTimeout) {
-                requestTimeoutMillis = 60000 // 60 segundos
-                connectTimeoutMillis = 30000 // 30 segundos
-                socketTimeoutMillis = 60000  // 60 segundos
+                requestTimeoutMillis = 60_000
+                connectTimeoutMillis = 30_000
+                socketTimeoutMillis  = 60_000
             }
             defaultRequest {
                 url("https://api.openai.com/v1/")
@@ -75,9 +71,7 @@ object OpenAiModule {
     fun provideDallEImageGenerator(
         @OpenAiHttpClient httpClient: HttpClient,
         json: Json
-    ): DallEImageGenerator {
-        return DallEImageGenerator(httpClient, json)
-    }
+    ): DallEImageGenerator = DallEImageGenerator(httpClient, json)
 
     @Provides
     @Singleton
@@ -85,30 +79,30 @@ object OpenAiModule {
         supabaseClient: SupabaseClient,
         @OpenAiHttpClient httpClient: HttpClient,
         json: Json
-    ): TermCorrectionService {
-        return TermCorrectionService(supabaseClient, httpClient, json)
-    }
+    ): TermCorrectionService = TermCorrectionService(supabaseClient, httpClient, json)
 
     @Provides
     @Singleton
     fun provideOpenAiClient(
         @OpenAiHttpClient httpClient: HttpClient,
-        json: Json,
-        imageGenerator: DallEImageGenerator,
+        json: Json
+    ): OpenAiClient = OpenAiClient(httpClient = httpClient, json = json, model = "gpt-4o")
+
+    @Provides
+    @Singleton
+    fun provideSearchRecipesUseCase(
+        openAiClient: OpenAiClient,
+        recipeRepository: RecipeRepository,
         cacheManager: RecipeCacheManager,
-        recipeRepository: RecipeRepository?,
         termCorrectionService: TermCorrectionService,
+        imageGenerator: DallEImageGenerator,
         tudoGostosoUseCase: SearchAndFetchTudoGostosoUseCase
-    ): OpenAiClient {
-        return OpenAiClient(
-            httpClient = httpClient,
-            json = json,
-            imageGenerator = imageGenerator,
-            cacheManager = cacheManager,
-            recipeRepository = recipeRepository,
-            termCorrectionService = termCorrectionService,
-            model = "gpt-4o",
-            tudoGostosoUseCase = tudoGostosoUseCase
-        )
-    }
+    ): SearchRecipesUseCase = SearchRecipesUseCase(
+        openAiClient = openAiClient,
+        recipeRepository = recipeRepository,
+        cacheManager = cacheManager,
+        termCorrectionService = termCorrectionService,
+        imageGenerator = imageGenerator,
+        tudoGostosoUseCase = tudoGostosoUseCase
+    )
 }

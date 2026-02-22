@@ -1,8 +1,6 @@
 ﻿package br.com.boddenb.comidinhas.routing
 
-import br.com.boddenb.comidinhas.data.image.DallEImageGenerator
 import br.com.boddenb.comidinhas.data.remote.OpenAiClient
-import br.com.boddenb.comidinhas.data.cache.RecipeCacheManager
 import br.com.boddenb.comidinhas.domain.model.ChatRequest
 import br.com.boddenb.comidinhas.domain.model.ChatResponse
 import br.com.boddenb.comidinhas.domain.model.RecipeSearchRequest
@@ -38,7 +36,6 @@ fun Application.configureRouting() {
         ?: System.getenv("OPENAI_API_KEY")
         ?: error("Defina OPENAI_API_KEY em local.properties ou como variável de ambiente")
 
-    // Cria Json e HttpClient adequados para ambiente server
     val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -55,24 +52,12 @@ fun Application.configureRouting() {
         }
     }
 
-    val imageGenerator = DallEImageGenerator(httpClient, json)
-    val cacheManager = RecipeCacheManager(maxSize = 50, ttlMillis = 1000L * 60L * 10L)
-
-    // ⚠️ Supabase SDK precisa de Android runtime, não funciona no servidor Ktor
-    // Para usar persistência no servidor, implemente um repositório REST ou use cliente HTTP direto
-
-    val openAi = OpenAiClient(
-        httpClient = httpClient,
-        json = json,
-        imageGenerator = imageGenerator,
-        cacheManager = cacheManager,
-        recipeRepository = null // Desabilitado no servidor
-    )
+    val openAi = OpenAiClient(httpClient = httpClient, json = json)
 
     routing {
         post("/recipes/search") {
             val req = call.receive<RecipeSearchRequest>()
-            val result = openAi.searchRecipes(req.query)
+            val result = openAi.generateRecipes(req.query)
             call.respond(result)
         }
         post("/chat") {
@@ -80,6 +65,6 @@ fun Application.configureRouting() {
             val result = openAi.chat(req.history)
             call.respond(ChatResponse(result))
         }
-        get("/") { call.respondText("OK") } // Health check
+        get("/") { call.respondText("OK") }
     }
 }

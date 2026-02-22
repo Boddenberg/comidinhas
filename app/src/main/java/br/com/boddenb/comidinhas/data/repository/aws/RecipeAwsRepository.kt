@@ -1,6 +1,7 @@
 package br.com.boddenb.comidinhas.data.repository.aws
 
 import android.graphics.Bitmap
+import br.com.boddenb.comidinhas.data.util.TextNormalizer
 import br.com.boddenb.comidinhas.data.model.recipe.RecipeEntity
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
@@ -13,6 +14,7 @@ import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Deprecated("Substituído por RecipeSupabaseRepository. Remover após confirmar que nenhum módulo referencia esta classe.")
 @Singleton
 class RecipeAwsRepository @Inject constructor(
     private val supabase: SupabaseClient
@@ -45,14 +47,7 @@ class RecipeAwsRepository @Inject constructor(
         }
     }
 
-    private fun normalizeKey(text: String): String = text.lowercase()
-        .replace("á", "a").replace("à", "a").replace("ã", "a").replace("â", "a")
-        .replace("é", "e").replace("ê", "e")
-        .replace("í", "i")
-        .replace("ó", "o").replace("ô", "o").replace("õ", "o")
-        .replace("ú", "u").replace("ü", "u")
-        .replace("ç", "c")
-        .trim()
+    private fun normalizeKey(text: String): String = TextNormalizer.normalize(text)
 
     suspend fun saveRecipe(recipe: RecipeEntity): Result<Unit> = withContext(Dispatchers.IO) {
         try {

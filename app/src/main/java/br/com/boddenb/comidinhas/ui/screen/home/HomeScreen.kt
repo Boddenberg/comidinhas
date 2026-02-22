@@ -40,7 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.boddenb.comidinhas.R
 import br.com.boddenb.comidinhas.domain.model.RecipeItem
+import br.com.boddenb.comidinhas.domain.model.SearchMode
 import br.com.boddenb.comidinhas.ui.screen.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
 
@@ -89,14 +91,16 @@ fun HomeScreen(
     var searchFocused by remember { mutableStateOf(false) }
     var showDeliveryComingSoon by remember { mutableStateOf(false) }
 
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
     fun requestSearch() { viewModel.requestSearch(); keyboardController?.hide() }
     fun performSearch(mode: SearchMode) {
         if (mode == SearchMode.DELIVERY) { showDeliveryComingSoon = true; return }
-        if (mode == SearchMode.OUT) { viewModel.performSearch(mode); onOpenEatOut(viewModel.searchQuery); return }
+        if (mode == SearchMode.OUT) { viewModel.performSearch(mode); onOpenEatOut(uiState.searchQuery); return }
         viewModel.performSearch(mode); keyboardController?.hide()
     }
 
-    val hasContent = viewModel.recipes.isNotEmpty() || viewModel.isLoading || viewModel.errorMessage != null
+    val hasContent = uiState.recipes.isNotEmpty() || uiState.isLoading || uiState.errorMessage != null
 
     val HomeBg = Color(0xFFF8F8F8)
 
@@ -229,7 +233,7 @@ fun HomeScreen(
                                         modifier = Modifier.padding(start = 14.dp).size(22.dp)
                                     )
                                     OutlinedTextField(
-                                        value = viewModel.searchQuery,
+                                        value = uiState.searchQuery,
                                         onValueChange = { viewModel.onSearchQueryChange(it) },
                                         modifier = Modifier
                                             .weight(1f)
@@ -254,7 +258,7 @@ fun HomeScreen(
                                         keyboardActions = KeyboardActions(onSearch = { requestSearch() })
                                     )
                                     AnimatedVisibility(
-                                        visible = viewModel.searchQuery.isNotEmpty(),
+                                        visible = uiState.searchQuery.isNotEmpty(),
                                         enter = fadeIn() + scaleIn(initialScale = 0.7f),
                                         exit  = fadeOut() + scaleOut(targetScale = 0.7f)
                                     ) {
@@ -390,7 +394,7 @@ fun HomeScreen(
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 BasicTextField(
-                                    value = viewModel.searchQuery,
+                                    value = uiState.searchQuery,
                                     onValueChange = { viewModel.onSearchQueryChange(it) },
                                     modifier = Modifier
                                         .weight(1f)
@@ -406,7 +410,7 @@ fun HomeScreen(
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                     keyboardActions = KeyboardActions(onSearch = { requestSearch() }),
                                     decorationBox = { inner ->
-                                        if (viewModel.searchQuery.isEmpty()) {
+                                        if (uiState.searchQuery.isEmpty()) {
                                             Text("Nova busca...", color = InkLight, fontSize = 13.sp)
                                         }
                                         inner()
@@ -414,7 +418,7 @@ fun HomeScreen(
                                 )
                             }
                             AnimatedVisibility(
-                                visible = viewModel.searchQuery.isNotEmpty(),
+                                visible = uiState.searchQuery.isNotEmpty(),
                                 enter = fadeIn() + scaleIn(initialScale = 0.8f),
                                 exit  = fadeOut() + scaleOut(targetScale = 0.8f)
                             ) {
@@ -454,7 +458,7 @@ fun HomeScreen(
                                     letterSpacing = 0.3.sp
                                 )
                                 Text(
-                                    (viewModel.displayQuery.ifBlank { viewModel.searchQuery })
+                                    (uiState.displayQuery.ifBlank { uiState.searchQuery })
                                         .replaceFirstChar { it.uppercase() },
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -464,7 +468,7 @@ fun HomeScreen(
                                 )
                             }
                             // Pill do modo atual
-                            viewModel.selectedMode?.let { mode ->
+                            uiState.selectedMode?.let { mode ->
                                 val (emoji, label, color) = when (mode) {
                                     SearchMode.PREPARAR -> Triple("🍳", "Preparar", Brand)
                                     SearchMode.DELIVERY -> Triple("🛵", "Delivery", Green)
@@ -490,7 +494,7 @@ fun HomeScreen(
 
                     // Conteúdo
                     when {
-                        viewModel.isLoading -> {
+                        uiState.isLoading -> {
                             Column(
                                 Modifier
                                     .fillMaxWidth()
@@ -501,7 +505,7 @@ fun HomeScreen(
                                 repeat(3) { RecipeCardSkeleton() }
                             }
                         }
-                        viewModel.errorMessage != null -> {
+                        uiState.errorMessage != null -> {
                             Box(
                                 Modifier
                                     .fillMaxSize()
@@ -512,7 +516,7 @@ fun HomeScreen(
                                     Text("😕", fontSize = 52.sp)
                                     Spacer(Modifier.height(16.dp))
                                     Text(
-                                        viewModel.errorMessage ?: "",
+                                        uiState.errorMessage ?: "",
                                         fontSize = 15.sp,
                                         color = InkMedium,
                                         textAlign = TextAlign.Center,
@@ -534,12 +538,12 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        viewModel.recipes.isNotEmpty() -> {
+                        uiState.recipes.isNotEmpty() -> {
                             LazyColumn(
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                itemsIndexed(viewModel.recipes) { index, recipe ->
+                                itemsIndexed(uiState.recipes) { index, recipe ->
                                     var visible by remember { mutableStateOf(false) }
                                     LaunchedEffect(Unit) { delay(index * 60L); visible = true }
                                     AnimatedVisibility(
@@ -613,7 +617,7 @@ fun HomeScreen(
             }
 
             // ── MODAL DE MODO (só quando não há modo selecionado ainda) ───
-            AnimatedVisibility(                visible = viewModel.showModeSelection,
+            AnimatedVisibility(                visible = uiState.showModeSelection,
                 enter = fadeIn(tween(180)),
                 exit  = fadeOut(tween(150))
             ) {
@@ -625,7 +629,7 @@ fun HomeScreen(
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     AnimatedVisibility(
-                        visible = viewModel.showModeSelection,
+                        visible = uiState.showModeSelection,
                         enter = slideInVertically(
                             initialOffsetY = { it },
                             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
@@ -660,7 +664,7 @@ fun HomeScreen(
                                     color = Ink
                                 )
                                 Text(
-                                    "\"${viewModel.searchQuery}\"",
+                                    "\"${uiState.searchQuery}\"",
                                     fontSize = 13.sp,
                                     color = InkLight,
                                     fontStyle = FontStyle.Italic,

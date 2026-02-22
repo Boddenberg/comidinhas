@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/logo-comidinhas.png" alt="Comidinhas Logo" width="180" />
+<img src="images/comidinhas-bellsp.png" alt="Comidinhas Logo" width="180" />
 
 # Comidinhas
 
@@ -209,6 +209,34 @@ UNSPLASH_CLIENT_ID=...
 2. Abra no Android Studio (Hedgehog ou superior)
 3. Configure as chaves de API
 4. Rode em um dispositivo ou emulador com Android 8.0+ (API 26+)
+
+---
+
+## Histórico de versões
+
+```
+v1.0 — Receitas  (base do projeto)
+├── Busca de receitas por termo livre
+├── Geração via GPT-4o com Structured Output
+├── Validação de termos culinários via GPT-4o-mini
+├── Correção de termos com cache no Supabase (term_corrections)
+├── Scraping do TudoGostoso como fonte principal
+├── Fallback de imagens: Brave Search → Unsplash
+├── Persistência de receitas no Supabase
+├── Modo "Comer fora" com mapa de restaurantes
+└── UI em Jetpack Compose com Material 3
+
+v1.1 — Qualidade de código  (refatoração SOLID + StateFlow)
+├── SearchRecipesUseCase centraliza toda a orquestração de busca
+├── HomeViewModel migrado para StateFlow com HomeUiState imutável
+├── HomeScreen consumindo uiState via collectAsStateWithLifecycle
+├── OpenAiClient restrito a HTTP da OpenAI (responsabilidade única)
+├── TextNormalizer centralizado, elimina duplicação entre repositórios
+├── AppLogger substituindo android.util.Log em todo o projeto
+├── FilterRestaurantsByFoodUseCase e ComerForaViewModel usando AppLogger
+├── RecipeAwsRepository marcado como @Deprecated (substituído pelo Supabase) - Futuramente removido
+└── Dependência lifecycle-runtime-compose adicionada
+```
 
 ---
 

@@ -1,6 +1,6 @@
 package br.com.boddenb.comidinhas.domain.usecase
 
-import android.util.Log
+import br.com.boddenb.comidinhas.data.logger.AppLogger
 import br.com.boddenb.comidinhas.data.remote.OpenAiClient
 import br.com.boddenb.comidinhas.domain.mapper.RestaurantToAiInfoMapper
 import br.com.boddenb.comidinhas.domain.model.Restaurant
@@ -10,44 +10,38 @@ class FilterRestaurantsByFoodUseCase @Inject constructor(
     private val openAiClient: OpenAiClient,
     private val mapper: RestaurantToAiInfoMapper
 ) {
-    companion object {
-        private const val TAG = "FilterRestaurantsUC"
-    }
+    private val TAG = "FilterRestaurantsUC"
 
     suspend operator fun invoke(
         restaurants: List<Restaurant>,
         foodQuery: String
     ): List<Restaurant> {
         if (foodQuery.isBlank()) {
-            Log.d(TAG, "Query vazia, retornando todos os ${restaurants.size} restaurantes")
+            AppLogger.d(TAG, "Query vazia, retornando todos os ${restaurants.size} restaurantes")
             return restaurants
         }
 
         return try {
-            Log.d(TAG, "Iniciando filtro por '$foodQuery' em ${restaurants.size} restaurantes")
+            AppLogger.d(TAG, "Iniciando filtro por '$foodQuery' em ${restaurants.size} restaurantes")
 
             val restaurantInfos = restaurants.map { mapper.map(it) }
 
-            Log.d(TAG, "Enviando para IA:")
+            AppLogger.d(TAG, "Enviando para IA (primeiros 3):")
             restaurantInfos.take(3).forEachIndexed { index, info ->
-                Log.d(TAG, "  ${index + 1}. ${info.take(100)}...")
+                AppLogger.d(TAG, "  ${index + 1}. ${info.take(100)}...")
             }
 
             val filteredInfos = openAiClient.filterRestaurantsByFood(restaurantInfos, foodQuery)
 
             val filtered = matchFilteredToRestaurants(restaurants, restaurantInfos, filteredInfos)
 
-            Log.d(TAG, "IA filtrou: ${filtered.size} de ${restaurants.size} restaurantes")
-            Log.d(TAG, "Restaurantes mantidos:")
-            filtered.forEachIndexed { index, r ->
-                Log.d(TAG, "  ${index + 1}. ${r.name}")
-            }
+            AppLogger.d(TAG, "IA filtrou: ${filtered.size} de ${restaurants.size} restaurantes")
+            filtered.forEachIndexed { index, r -> AppLogger.d(TAG, "  ${index + 1}. ${r.name}") }
 
             sortByRating(filtered)
         } catch (e: Exception) {
-            Log.e(TAG, "ERRO ao chamar IA: ${e.message}")
-            Log.e(TAG, "   Retornando TODOS os ${restaurants.size} restaurantes sem filtro")
-            e.printStackTrace()
+            AppLogger.e(TAG, "ERRO ao chamar IA: ${e.message}", e)
+            AppLogger.e(TAG, "Retornando TODOS os ${restaurants.size} restaurantes sem filtro")
             restaurants
         }
     }
@@ -74,4 +68,3 @@ class FilterRestaurantsByFoodUseCase @Inject constructor(
         )
     }
 }
-

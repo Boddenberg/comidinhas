@@ -1,8 +1,8 @@
 package br.com.boddenb.comidinhas.ui.screen.eatout
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import br.com.boddenb.comidinhas.data.logger.AppLogger
 import br.com.boddenb.comidinhas.domain.config.AppConstants
 import br.com.boddenb.comidinhas.domain.model.LatLng
 import br.com.boddenb.comidinhas.domain.model.OrderBy
@@ -107,7 +107,7 @@ class ComerForaViewModel @Inject constructor(
 
                 updateUiState(filteredRestaurants)
             } catch (e: Exception) {
-                Log.e(TAG, "Error in refresh(): ${e.message}", e)
+                AppLogger.e(TAG, "Error in refresh(): ${e.message}", e)
                 _state.value = ComerForaUiState.Error(e.message ?: "Falha ao obter restaurantes")
             }
         }
@@ -120,23 +120,20 @@ class ComerForaViewModel @Inject constructor(
                             cachedRestaurants.isEmpty()
 
         return if (needsNewSearch) {
-            Log.d(TAG, "🔄 Buscando novos restaurantes (raio=${radiusMeters}m)")
-
+            AppLogger.d(TAG, "🔄 Buscando novos restaurantes (raio=${radiusMeters}m)")
             val fetched = getNearbyRestaurantsUseCase(
                 center = currentLocation!!,
                 radiusMeters = radiusMeters,
                 orderBy = orderBy,
                 includedTypes = listOf("restaurant")
             )
-
             lastSearchLocation = currentLocation
             lastSearchRadius = radiusMeters
             lastSearchOrderBy = orderBy
-
-            Log.d(TAG, "✅ ${fetched.size} restaurantes encontrados")
+            AppLogger.d(TAG, "✅ ${fetched.size} restaurantes encontrados")
             fetched
         } else {
-            Log.d(TAG, "📦 Usando cache: ${cachedRestaurants.size} restaurantes")
+            AppLogger.d(TAG, "📦 Usando cache: ${cachedRestaurants.size} restaurantes")
             cachedRestaurants
         }
     }

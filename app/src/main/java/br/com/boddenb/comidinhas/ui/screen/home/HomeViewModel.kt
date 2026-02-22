@@ -1,118 +1,96 @@
 ﻿package br.com.boddenb.comidinhas.ui.screen.home
 
 import android.util.Log
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import br.com.boddenb.comidinhas.data.remote.OpenAiClient
-import br.com.boddenb.comidinhas.domain.model.Recipe
 import br.com.boddenb.comidinhas.domain.model.RecipeItem
+import br.com.boddenb.comidinhas.domain.model.SearchMode
 import br.com.boddenb.comidinhas.domain.usecase.SaveRecipeUseCase
+import br.com.boddenb.comidinhas.domain.usecase.SearchRecipesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import br.com.boddenb.comidinhas.domain.model.Recipe
 
-enum class SearchMode {
-    PREPARAR,
-    DELIVERY,
-    OUT
-}
+data class HomeUiState(
+    val searchQuery: String = "",
+    val displayQuery: String = "",
+    val recipes: List<RecipeItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val showModeSelection: Boolean = false,
+    val selectedMode: SearchMode? = null
+)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val openAiClient: OpenAiClient,
+    private val searchRecipesUseCase: SearchRecipesUseCase,
     private val saveRecipeUseCase: SaveRecipeUseCase
 ) : ViewModel() {
 
-    var searchQuery by mutableStateOf("")
-        private set
-
-    /** Termo exibido na UI após a busca — pode ser diferente do digitado se houve correção. */
-    var displayQuery by mutableStateOf("")
-        private set
-
-    var recipes by mutableStateOf<List<RecipeItem>>(emptyList())
-        private set
-
-    var isLoading by mutableStateOf(false)
-        private set
-
-    var errorMessage by mutableStateOf<String?>(null)
-        private set
-
-    var showModeSelection by mutableStateOf(false)
-        private set
-
-    var selectedMode by mutableStateOf<SearchMode?>(null)
-        private set
+    private val _uiState = MutableStateFlow(HomeUiState())
+    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     fun onSearchQueryChange(query: String) {
-        searchQuery = query
+        _uiState.update { it.copy(searchQuery = query) }
     }
 
     fun requestSearch() {
-        if (searchQuery.isBlank()) return
-        if (selectedMode != null) {
-            performSearch(selectedMode!!)
+        val state = _uiState.value
+        if (state.searchQuery.isBlank()) return
+        if (state.selectedMode != null) {
+            performSearch(state.selectedMode)
         } else {
-            showModeSelection = true
+            _uiState.update { it.copy(showModeSelection = true) }
         }
     }
 
-    fun openModeSelection() {
-        showModeSelection = true
+
+    fun hideModeSelection() {
+        _uiState.update { it.copy(showModeSelection = false) }
     }
 
     fun performSearch(mode: SearchMode = SearchMode.PREPARAR) {
-        if (searchQuery.isBlank()) return
+        val query = _uiState.value.searchQuery
+        if (query.isBlank()) return
 
-        selectedMode = mode
-        showModeSelection = false
+        _uiState.update { it.copy(selectedMode = mode, showModeSelection = false) }
 
         when (mode) {
-            SearchMode.PREPARAR -> {
-                viewModelScope.launch {
-                    isLoading = true
-                    errorMessage = null
-                    try {
-                        val response = openAiClient.searchRecipes(searchQuery)
-
-                        // Verifica se há mensagem de erro (termo inválido)
-                        if (response.errorMessage != null) {
-                            errorMessage = response.errorMessage
-                            recipes = emptyList()
-                            return@launch
-                        }
-
-                        // Atualiza displayQuery com o termo corrigido retornado pela API
-                        displayQuery = response.query
-                            .trim()
-                            .replaceFirstChar { it.uppercase() }
-
-                        recipes = response.results
-
-                        saveRecipesAutomatically(response.results)
-
-                    } catch (e: Exception) {
-                        errorMessage = "Erro ao buscar receitas: ${e.message}"
-                    } finally {
-                        isLoading = false
-                    }
-                }
-            }
+            SearchMode.PREPARAR -> launchRecipeSearch(query)
             SearchMode.DELIVERY -> {
-                showModeSelection = false
-                selectedMode = null
+                _uiState.update { it.copy(selectedMode = null) }
             }
-            SearchMode.OUT -> {
-                showModeSelection = false
+            SearchMode.OUT -> Unit
+        }
+    }
+
+    private fun launchRecipeSearch(query: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            try {
+                val response = searchRecipesUseCase(query)
+
+                if (response.errorMessage != null) {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = response.errorMessage, recipes = emptyList()) }
+                    return@launch
+                }
+
+                val displayQuery = response.query.trim().replaceFirstChar { it.uppercase() }
+                _uiState.update { it.copy(isLoading = false, displayQuery = displayQuery, recipes = response.results) }
+
+                saveRecipesAutomatically(response.results, query)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Erro ao buscar receitas: ${e.message}") }
             }
         }
     }
 
-    private fun saveRecipesAutomatically(recipeItems: List<RecipeItem>) {
+    private fun saveRecipesAutomatically(recipeItems: List<RecipeItem>, query: String) {
         viewModelScope.launch {
             recipeItems.forEach { recipeItem ->
                 try {
@@ -125,48 +103,31 @@ class HomeViewModel @Inject constructor(
                         cookingTime = recipeItem.cookingTime,
                         servings = recipeItem.servings
                     )
-
                     saveRecipeUseCase(
                         recipe = recipe,
                         originalImageUrl = recipeItem.imageUrl,
-                        searchQuery = searchQuery.lowercase()
+                        searchQuery = query.lowercase()
                     ).onSuccess {
-                        Log.d("HomeViewModel", "✅ Receita salva automaticamente: ${recipe.name}")
+                        Log.d("HomeViewModel", "✅ Receita salva: ${recipe.name}")
                     }.onFailure { error ->
-                        Log.w("HomeViewModel", "⚠️ Erro ao salvar receita (silencioso): ${error.message}")
+                        Log.w("HomeViewModel", "⚠️ Erro ao salvar receita: ${error.message}")
                     }
                 } catch (e: Exception) {
-                    Log.w("HomeViewModel", "⚠️ Erro ao processar receita: ${e.message}")
+                    Log.w("HomeViewModel", "⚠️ Erro inesperado ao salvar: ${e.message}")
                 }
             }
         }
     }
 
-    fun hideModeSelection() {
-        showModeSelection = false
-    }
-
     fun clearSearchOnly() {
-        searchQuery = ""
-        displayQuery = ""
-        recipes = emptyList()
-        errorMessage = null
-        isLoading = false
-        showModeSelection = false
+        _uiState.update { it.copy(searchQuery = "", displayQuery = "", recipes = emptyList(), errorMessage = null, isLoading = false, showModeSelection = false) }
     }
 
     fun clearSearch() {
-        searchQuery = ""
-        displayQuery = ""
-        recipes = emptyList()
-        errorMessage = null
-        isLoading = false
-        selectedMode = null
-        showModeSelection = false
+        _uiState.update { HomeUiState() }
     }
 
     fun dismissError() {
         clearSearchOnly()
     }
 }
-

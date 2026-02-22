@@ -119,6 +119,7 @@ kapt {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     // ✅ precisa desta
     implementation("io.ktor:ktor-client-logging:3.0.1")
