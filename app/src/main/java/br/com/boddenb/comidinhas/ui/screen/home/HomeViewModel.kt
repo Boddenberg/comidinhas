@@ -58,14 +58,19 @@ class HomeViewModel @Inject constructor(
         val query = _uiState.value.searchQuery
         if (query.isBlank()) return
 
-        _uiState.update { it.copy(selectedMode = mode, showModeSelection = false) }
-
         when (mode) {
-            SearchMode.PREPARAR -> launchRecipeSearch(query)
-            SearchMode.DELIVERY -> {
-                _uiState.update { it.copy(selectedMode = null) }
+            SearchMode.PREPARAR -> {
+                _uiState.update { it.copy(selectedMode = mode, showModeSelection = false) }
+                launchRecipeSearch(query)
             }
-            SearchMode.OUT -> Unit
+            SearchMode.DELIVERY -> {
+                // Delivery ainda não implementado — não persiste modo
+                _uiState.update { it.copy(showModeSelection = false) }
+            }
+            SearchMode.OUT -> {
+                // Não persiste o modo OUT: na próxima busca o modal deve aparecer novamente
+                _uiState.update { it.copy(showModeSelection = false) }
+            }
         }
     }
 

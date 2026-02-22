@@ -236,6 +236,17 @@ v1.1 — Qualidade de código  (refatoração SOLID + StateFlow)
 ├── FilterRestaurantsByFoodUseCase e ComerForaViewModel usando AppLogger
 ├── RecipeAwsRepository marcado como @Deprecated (substituído pelo Supabase) - Futuramente removido
 └── Dependência lifecycle-runtime-compose adicionada
+
+v1.2 — Detalhes da receita + correções de navegação
+├── Tela de detalhes completamente reformulada com layout editorial
+├── RecipeHeroHeader: imagem hero com gradiente, título e chips de info
+├── IngredientsCard: card com emojis de comida rotativos, checkbox circular e barra de progresso
+├── StepsTimelineCard: modo de preparo em formato timeline com linha conectora animada
+├── AppShapes: corners maiores em todos os níveis do Material 3 (8/12/16/24/32dp)
+├── Typography reforçada: headlines ExtraBold, body mais legível (15sp/24sp)
+├── Tokens de espaçamento centralizados em Spacing.kt
+├── Correção: botão voltar do sistema na lista de receitas voltava ao menu em vez de fechar o app
+└── Correção: modo "Comer fora" não resetava selectedMode, bloqueando buscas subsequentes
 ```
 
 ---

@@ -4,6 +4,16 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+
+// ── Shapes editoriais: corners maiores em todos os níveis ────────────────────
+private val AppShapes = Shapes(
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+    small      = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    medium     = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    large      = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
+)
 
 private val LightColorScheme = lightColorScheme(
     primary             = Brand,
@@ -63,6 +73,7 @@ fun ComidinhasTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography  = AppTypography,
+        shapes      = AppShapes,
         content     = content
     )
 }

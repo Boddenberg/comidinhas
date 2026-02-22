@@ -1,5 +1,6 @@
 ﻿package br.com.boddenb.comidinhas.ui.screen.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -46,7 +47,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
 
-// ─── Shimmer ───────────────────────────────────────────────────────────────
 @Composable
 fun shimmerBrush(): Brush {
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -74,7 +74,6 @@ fun RecipeCardSkeleton() {
     )
 }
 
-// ─── Sugestões ─────────────────────────────────────────────────────────────
 private val suggestions = listOf(
     "Lasanha", "Bolo de cenoura",
     "Risoto", "Tacos", "Feijoada", "Ramen", "Pizza"
@@ -102,18 +101,22 @@ fun HomeScreen(
 
     val hasContent = uiState.recipes.isNotEmpty() || uiState.isLoading || uiState.errorMessage != null
 
+    // A lista de resultados é um estado interno da rota "home", não uma tela separada.
+    // Sem este handler, o botão voltar do sistema fecha o app em vez de limpar os resultados.
+    BackHandler(enabled = hasContent) {
+        viewModel.clearSearch()
+    }
+
     val HomeBg = Color(0xFFF8F8F8)
 
     Scaffold(containerColor = HomeBg) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
 
-            // ── TELA INICIAL ───────────────────────────────────────────────
             AnimatedVisibility(
                 visible = !hasContent,
                 enter = fadeIn(tween(300)),
                 exit  = fadeOut(tween(180))
             ) {
-                // Usa BoxWithConstraints para empurrar o menu para o fundo real da tela
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -128,7 +131,6 @@ fun HomeScreen(
 
                         Spacer(Modifier.height(24.dp))
 
-                        // ── Logo grande ────────────────────────────────────────
                         var logoVisible by remember { mutableStateOf(false) }
                         LaunchedEffect(Unit) { delay(60); logoVisible = true }
                         AnimatedVisibility(
@@ -153,7 +155,6 @@ fun HomeScreen(
 
                         Spacer(Modifier.height(4.dp))
 
-                        // ── Headline duas linhas ───────────────────────────────
                         var headlineVisible by remember { mutableStateOf(false) }
                         LaunchedEffect(Unit) { delay(200); headlineVisible = true }
                         AnimatedVisibility(
@@ -189,7 +190,6 @@ fun HomeScreen(
 
                         Spacer(Modifier.height(32.dp))
 
-                        // ── Search bar ─────────────────────────────────────────
                         var barVisible by remember { mutableStateOf(false) }
                         LaunchedEffect(Unit) { delay(320); barVisible = true }
                         AnimatedVisibility(
@@ -282,10 +282,8 @@ fun HomeScreen(
                             }
                         }
 
-                        // Empurra o menu para o fundo da tela
                         Spacer(Modifier.weight(1f))
 
-                        // ── Mais buscados — sempre no fundo ────────────────────
                         var tagsVisible by remember { mutableStateOf(false) }
                         LaunchedEffect(Unit) { delay(500); tagsVisible = true }
                         AnimatedVisibility(
@@ -328,7 +326,6 @@ fun HomeScreen(
                 }
             }
 
-            // ── TELA COM RESULTADOS ────────────────────────────────────────
             AnimatedVisibility(
                 visible = hasContent,
                 enter = fadeIn(tween(300)),
@@ -339,8 +336,6 @@ fun HomeScreen(
                         .fillMaxSize()
                         .background(Color(0xFFFAF8F5))
                 ) {
-
-                    // Header compacto
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -372,7 +367,6 @@ fun HomeScreen(
                                 )
                             }
                             Spacer(Modifier.width(12.dp))
-                            // Search bar inline compacta
                             val searchBorderColor by animateColorAsState(
                                 if (searchFocused) Brand else Color.Transparent,
                                 label = "b2"
@@ -441,7 +435,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // Chips de título + modo
                     AnimatedVisibility(visible = hasContent, enter = fadeIn(tween(200))) {
                         Row(
                             modifier = Modifier
@@ -467,7 +460,6 @@ fun HomeScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            // Pill do modo atual
                             uiState.selectedMode?.let { mode ->
                                 val (emoji, label, color) = when (mode) {
                                     SearchMode.PREPARAR -> Triple("🍳", "Preparar", Brand)
@@ -492,7 +484,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // Conteúdo
                     when {
                         uiState.isLoading -> {
                             Column(
@@ -563,15 +554,12 @@ fun HomeScreen(
                 }
             }
 
-            // ── POPUP: DELIVERY EM BREVE ──────────────────────────────────
             if (showDeliveryComingSoon) {
                 AlertDialog(
                     onDismissRequest = { showDeliveryComingSoon = false },
                     containerColor = Color.White,
                     shape = RoundedCornerShape(20.dp),
-                    icon = {
-                        Text("🛵", fontSize = 40.sp)
-                    },
+                    icon = { Text("🛵", fontSize = 40.sp) },
                     title = {
                         Text(
                             "Em breve!",
@@ -616,8 +604,8 @@ fun HomeScreen(
                 )
             }
 
-            // ── MODAL DE MODO (só quando não há modo selecionado ainda) ───
-            AnimatedVisibility(                visible = uiState.showModeSelection,
+            AnimatedVisibility(
+                visible = uiState.showModeSelection,
                 enter = fadeIn(tween(180)),
                 exit  = fadeOut(tween(150))
             ) {
@@ -634,7 +622,7 @@ fun HomeScreen(
                             initialOffsetY = { it },
                             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
                         ) + fadeIn(tween(180)),
-                        exit  = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(200)) + fadeOut(tween(180))
+                        exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(200)) + fadeOut(tween(180))
                     ) {
                         Card(
                             modifier = Modifier
@@ -670,11 +658,11 @@ fun HomeScreen(
                                     fontStyle = FontStyle.Italic,
                                     modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
                                 )
-                                AnimatedModeButton("🍳", "Preparar em casa",      "Receita passo a passo",      Brand) { performSearch(SearchMode.PREPARAR) }
+                                AnimatedModeButton("🍳", "Preparar em casa",  "Receita passo a passo",      Brand) { performSearch(SearchMode.PREPARAR) }
                                 Spacer(Modifier.height(10.dp))
-                                AnimatedModeButton("🛵", "Pedir delivery",         "Entrega onde você está",     Green) { performSearch(SearchMode.DELIVERY) }
+                                AnimatedModeButton("🛵", "Pedir delivery",    "Entrega onde você está",     Green) { performSearch(SearchMode.DELIVERY) }
                                 Spacer(Modifier.height(10.dp))
-                                AnimatedModeButton("🗺️", "Comer fora",            "Restaurantes perto de você", Blue)  { performSearch(SearchMode.OUT) }
+                                AnimatedModeButton("🗺️", "Comer fora",       "Restaurantes perto de você", Blue)  { performSearch(SearchMode.OUT) }
                                 Spacer(Modifier.height(8.dp))
                                 TextButton(
                                     onClick = { viewModel.hideModeSelection() },
@@ -690,9 +678,6 @@ fun HomeScreen(
         }
     }
 }
-
-// ─── Helpers tela inicial ───────────────────────────────────────────────────
-
 
 @Composable
 private fun HomeSuggestionChip(label: String, delayMs: Long, onClick: () -> Unit) {
@@ -720,18 +705,11 @@ private fun HomeSuggestionChip(label: String, delayMs: Long, onClick: () -> Unit
                 .clickable(source, null) { onClick() }
                 .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
-            Text(
-                label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = InkMedium
-            )
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = InkMedium)
         }
     }
 }
 
-
-// ─── Botão de modo ─────────────────────────────────────────────────────────
 @Composable
 fun AnimatedModeButton(emoji: String, title: String, subtitle: String, color: Color, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
@@ -768,7 +746,6 @@ fun AnimatedModeButton(emoji: String, title: String, subtitle: String, color: Co
     }
 }
 
-// ─── Recipe Card ────────────────────────────────────────────────────────────
 @Composable
 fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
@@ -793,7 +770,6 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
             .clickable(source, null) { onClick() }
     ) {
         Column {
-            // Imagem
             Box(modifier = Modifier.fillMaxWidth().height(190.dp)) {
                 if (!recipe.imageUrl.isNullOrEmpty()) {
                     Image(
@@ -810,7 +786,6 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
                         contentAlignment = Alignment.Center
                     ) { Text("🍽️", fontSize = 52.sp) }
                 }
-                // Scrim bottom
                 Box(
                     modifier = Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
@@ -820,7 +795,6 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
                         )
                     )
                 )
-                // Badges
                 Row(
                     modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -830,7 +804,6 @@ fun RecipeCard(recipe: RecipeItem, onClick: () -> Unit) {
                 }
             }
 
-            // Info
             Column(modifier = Modifier.padding(14.dp, 12.dp, 14.dp, 14.dp)) {
                 Text(
                     recipe.name,
