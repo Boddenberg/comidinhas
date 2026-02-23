@@ -304,6 +304,7 @@ Este projeto é privado e de uso pessoal.
 
 ---
 
+
 <div align="center">
   Feito com ❤️ e muita fome
 </div>
