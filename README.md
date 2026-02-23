@@ -255,12 +255,35 @@ v1.2 — Detalhes da receita + correções de navegação
 ├── Correção: botão voltar do sistema na lista de receitas voltava ao menu em vez de fechar o app
 └── Correção: modo "Comer fora" não resetava selectedMode, bloqueando buscas subsequentes
 
+v1.5 — Correção crítica: filtro de busca no Supabase ignorado
+├── Bug: RecipeEntity usava camelCase (searchQuery, imageUrl, cookingTime, createdAt)
+│   sem @SerialName, causando mismatch com colunas snake_case do PostgreSQL
+├── O filtro eq("searchQuery", ...) era ignorado silenciosamente pelo Supabase
+│   e retornava TODAS as receitas da tabela — por isso "Risoto de filé mignon"
+│   aparecia numa busca por "tacos"
+├── Correção: @SerialName adicionado em searchQuery→search_query, imageUrl→image_url,
+│   cookingTime→cooking_time, createdAt→created_at
+└── Filtro corrigido para eq("search_query", ...) no RecipeSupabaseRepository
+
 v1.4 — Correções de acessibilidade e legibilidade na tela de detalhes
 ├── Subtítulos "Toque para marcar" e "Toque em um passo" agora legíveis (alpha removido)
 ├── Cards de ingredientes e modo de preparo trocados para branco puro com elevation 1dp
 ├── Interior dos cards usa Surface0 (creme suave) criando separação visual sutil das linhas
 ├── Bolha do número do passo: fundo Green.copy(alpha=0.15f) garante contraste adequado
 └── IngredientRow: fundo desmarcado transparente alinhado ao novo fundo Surface0 do card
+
+v1.6 — Qualidade de resultado: imagem obrigatória, deduplicação e logs de descarte
+├── TudoGostoso: se top 1 não tem imagem, tenta candidatos seguintes antes de descartar
+├── TudoGostoso: receita descartada se a URL da imagem retornar erro HTTP ao ser acessada
+├── HomeViewModel: deduplicação por imageUrl antes do save — receita com foto repetida é descartada
+├── HomeViewModel: log estruturado de receitas descartadas com motivo (403, imagem duplicada, exceção)
+├── AppLogger.searchPanorama: seção "DESCARTADAS" exibe nome e motivo de cada receita rejeitada
+├── BraveWebSearchDiscovery: migrado de HTML scraping do Google para Brave Web Search API
+│   └── logs detalhados de request/response com HTTP status, tamanho e candidatos encontrados
+├── CompositeRecipeLinkDiscovery: Modo B agora usa Brave Search API em vez de Google scraping
+├── SearchAndFetchTudoGostosoUseCase.executeAllCandidates: filtra receitas sem imagem acessível
+├── RecipeSupabaseRepository: validação de Content-Type antes do upload impede armazenar HTML
+└── TudoGostosoDetailExtractor: logs de request/response HTTP explícitos por requisição
 
 v1.3 — Expansão de queries + card de destaque visual
 ├── GPT classifica o termo antes de buscar: genérico ou específico

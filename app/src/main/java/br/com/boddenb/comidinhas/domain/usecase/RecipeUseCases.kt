@@ -10,17 +10,24 @@ import javax.inject.Inject
 class SaveRecipeUseCase @Inject constructor(
     private val recipeRepository: RecipeRepository
 ) {
-    /** Salva uma receita com upload de imagem a partir de URL externa. */
+    /** Salva uma receita com upload de imagem a partir de URL externa.
+     *  Retorna a URL do Supabase Storage em caso de sucesso, falha caso a imagem seja inválida. */
     suspend operator fun invoke(
         recipe: Recipe,
         originalImageUrl: String?,
         searchQuery: String
-    ): Result<Unit> = runCatching {
+    ): Result<String> = runCatching {
         val recipeId = recipe.id.ifEmpty { UUID.randomUUID().toString() }
         val uploadedUrl = if (!originalImageUrl.isNullOrEmpty()) {
             recipeRepository.uploadRecipeImageFromUrl(originalImageUrl, recipeId).getOrNull()
         } else null
-        recipeRepository.saveRecipe(buildEntity(recipe, recipeId, uploadedUrl ?: originalImageUrl, searchQuery)).getOrThrow()
+
+        if (uploadedUrl == null) {
+            throw Exception("Imagem indisponível para \"${recipe.name}\" — receita descartada")
+        }
+
+        recipeRepository.saveRecipe(buildEntity(recipe, recipeId, uploadedUrl, searchQuery)).getOrThrow()
+        uploadedUrl
     }
 
     /** Salva uma receita com bitmap de imagem local. */
@@ -47,7 +54,6 @@ class SaveRecipeUseCase @Inject constructor(
         ingredients = recipe.ingredients,
         instructions = recipe.instructions,
         imageUrl = imageUrl,
-        cookingTime = recipe.cookingTime,
         servings = recipe.servings,
         searchQuery = searchQuery.lowercase()
     )

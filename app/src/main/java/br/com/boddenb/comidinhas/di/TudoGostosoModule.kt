@@ -1,8 +1,8 @@
 package br.com.boddenb.comidinhas.di
 
 import br.com.boddenb.comidinhas.domain.repository.RecipeRepository
+import br.com.boddenb.comidinhas.data.scraper.BraveWebSearchDiscovery
 import br.com.boddenb.comidinhas.data.scraper.CompositeRecipeLinkDiscovery
-import br.com.boddenb.comidinhas.data.scraper.GoogleSearchDiscovery
 import br.com.boddenb.comidinhas.data.scraper.RecipeDetailExtractor
 import br.com.boddenb.comidinhas.data.scraper.RecipeLinkDiscovery
 import br.com.boddenb.comidinhas.data.scraper.TudoGostosoDetailExtractor
@@ -60,17 +60,18 @@ object TudoGostosoModule {
 
     @Provides
     @Singleton
-    fun provideGoogleSearchDiscovery(
-        @ScrapingHttpClient httpClient: HttpClient
-    ): GoogleSearchDiscovery {
-        return GoogleSearchDiscovery(httpClient)
+    fun provideBraveWebSearchDiscovery(
+        @ScrapingHttpClient httpClient: HttpClient,
+        json: Json
+    ): BraveWebSearchDiscovery {
+        return BraveWebSearchDiscovery(httpClient, json)
     }
 
     @Provides
     @Singleton
     fun provideRecipeLinkDiscovery(
         modeA: TudoGostosoSearchDiscovery,
-        modeB: GoogleSearchDiscovery
+        modeB: BraveWebSearchDiscovery
     ): RecipeLinkDiscovery {
         return CompositeRecipeLinkDiscovery(modeA, modeB)
     }

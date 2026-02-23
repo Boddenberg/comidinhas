@@ -88,6 +88,93 @@ object AppLogger {
         d(BUSCA, "")
     }
 
+    /**
+     * Panorama estruturado de diagnóstico emitido ao final de cada busca.
+     *
+     * Exibe, para cada receita retornada:
+     *   - índice, nome e ID
+     *   - origem da receita (Supabase / TudoGostoso / OpenAI / Cache)
+     *   - URL da imagem e sua origem
+     *   - quantidade de ingredientes e passos
+     *   - cookingTime e servings
+     *   - flag de destaque (featured)
+     *
+     * Receitas descartadas por falta de dados também são listadas.
+     */
+    fun searchPanorama(
+        query: String,
+        source: String,
+        included: List<PanoramaRecipe>,
+        discarded: List<DiscardedRecipe> = emptyList(),
+        isGeneric: Boolean = false,
+        featuredId: String? = null
+    ) {
+        val line = "═".repeat(56)
+        val sep  = "─".repeat(56)
+
+        d(BUSCA, "")
+        d(BUSCA, "╔$line╗")
+        d(BUSCA, "║  📋 PANORAMA DA BUSCA")
+        d(BUSCA, "║  Query   : \"$query\"")
+        d(BUSCA, "║  Fonte   : $source")
+        d(BUSCA, "║  Tipo    : ${if (isGeneric) "Genérica (lista de variações)" else "Específica"}")
+        d(BUSCA, "║  Total   : ${included.size} receita(s) incluída(s)  |  ${discarded.size} descartada(s)")
+        d(BUSCA, "╠$line╣")
+
+        if (included.isEmpty()) {
+            w(BUSCA, "║  ⚠️ Nenhuma receita retornada ao usuário")
+        } else {
+            included.forEachIndexed { idx, r ->
+                val featuredMark = if (r.id == featuredId) " ⭐ DESTAQUE" else ""
+                d(BUSCA, "║")
+                d(BUSCA, "║  [${idx + 1}] ${r.name}$featuredMark")
+                d(BUSCA, "║      ID          : ${r.id}")
+                d(BUSCA, "║      Origem Rec. : ${r.recipeSource}")
+                d(BUSCA, "║      Imagem URL  : ${r.imageUrl ?: "⚠️ NENHUMA"}")
+                d(BUSCA, "║      Origem Img. : ${r.imageSource ?: "—"}")
+                d(BUSCA, "║      Ingredientes: ${r.ingredientsCount}")
+                d(BUSCA, "║      Passos      : ${r.stepsCount}")
+                d(BUSCA, "║      Tempo       : ${r.cookingTime ?: "—"}")
+                d(BUSCA, "║      Porções     : ${r.servings ?: "—"}")
+                if (!r.sourceUrl.isNullOrBlank()) {
+                    d(BUSCA, "║      URL Origem  : ${r.sourceUrl}")
+                }
+                if (idx < included.lastIndex) d(BUSCA, "║      $sep")
+            }
+        }
+
+        if (discarded.isNotEmpty()) {
+            d(BUSCA, "╠$line╣")
+            w(BUSCA, "║  🗑️ DESCARTADAS (${discarded.size})")
+            discarded.forEachIndexed { idx, r ->
+                w(BUSCA, "║  [D${idx + 1}] ${r.name}  →  Motivo: ${r.reason}")
+            }
+        }
+
+        d(BUSCA, "╚$line╝")
+        d(BUSCA, "")
+    }
+
+    /** Representa uma receita incluída no resultado final para o panorama. */
+    data class PanoramaRecipe(
+        val id: String,
+        val name: String,
+        val recipeSource: String,
+        val imageUrl: String?,
+        val imageSource: String?,
+        val ingredientsCount: Int,
+        val stepsCount: Int,
+        val cookingTime: String?,
+        val servings: String?,
+        val sourceUrl: String? = null
+    )
+
+    /** Representa uma receita descartada antes de ser incluída no resultado. */
+    data class DiscardedRecipe(
+        val name: String,
+        val reason: String
+    )
+
     // ── Cache ────────────────────────────────────────────────────────────────
     fun cacheHit(query: String) =
         i(CACHE, "📥 HIT  → \"$query\" encontrado no cache em memória")
@@ -158,7 +245,7 @@ object AppLogger {
         d(TUDO_GOSTOSO, "│  [Modo A] $count candidato(s) encontrado(s)")
 
     fun tgModeB(url: String) =
-        d(TUDO_GOSTOSO, "│  [Modo B] Google scraping: $url")
+        d(TUDO_GOSTOSO, "│  [Modo B] Brave Web Search: $url")
 
     fun tgModeBResult(count: Int) =
         d(TUDO_GOSTOSO, "│  [Modo B] $count candidato(s) encontrado(s)")

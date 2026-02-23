@@ -10,9 +10,23 @@ import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+
+@Serializable
+private data class AwsRecipeInsertDto(
+    @SerialName("id")           val id: String,
+    @SerialName("name")         val name: String,
+    @SerialName("ingredients")  val ingredients: List<String>,
+    @SerialName("instructions") val instructions: List<String>,
+    @SerialName("imageUrl")     val imageUrl: String?,
+    @SerialName("servings")     val servings: String?,
+    @SerialName("searchQuery")  val searchQuery: String?,
+    @SerialName("source")       val source: String?
+)
 
 @Deprecated("Substituído por RecipeSupabaseRepository. Remover após confirmar que nenhum módulo referencia esta classe.")
 @Singleton
@@ -58,17 +72,15 @@ class RecipeAwsRepository @Inject constructor(
                 return@withContext Result.success(Unit)
             }
 
-            supabase.from(TABLE).insert(mapOf(
-                "id" to recipe.id,
-                "name" to recipe.name,
-                "ingredients" to recipe.ingredients,
-                "instructions" to recipe.instructions,
-                "imageUrl" to recipe.imageUrl,
-                "cookingTime" to recipe.cookingTime,
-                "servings" to recipe.servings,
-                "searchQuery" to normalizedQuery,
-                "createdAt" to recipe.createdAt,
-                "source" to recipe.source
+            supabase.from(TABLE).insert(AwsRecipeInsertDto(
+                id           = recipe.id,
+                name         = recipe.name,
+                ingredients  = recipe.ingredients,
+                instructions = recipe.instructions,
+                imageUrl     = recipe.imageUrl,
+                servings     = recipe.servings,
+                searchQuery  = normalizedQuery,
+                source       = recipe.source
             ))
 
             log("d", "💾 NOVA RECEITA salva no Supabase: ${recipe.name} (id: ${recipe.id}, query: $normalizedQuery)")

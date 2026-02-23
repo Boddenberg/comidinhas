@@ -50,6 +50,9 @@ class DallEImageGenerator @Inject constructor(
         AppLogger.imageStart(recipeTitle, "Brave")
         return try {
             val query = "$recipeTitle receita"
+            AppLogger.d(AppLogger.IMAGEM, "│   📤 [BraveImages/GET] Busca de imagem")
+            AppLogger.d(AppLogger.IMAGEM, "│       Endpoint: $BRAVE_IMAGE_SEARCH_URL")
+            AppLogger.d(AppLogger.IMAGEM, "│       Query   : \"$query\"")
 
             val response: HttpResponse = webClient.get(BRAVE_IMAGE_SEARCH_URL) {
                 header("Accept", "application/json")
@@ -60,23 +63,26 @@ class DallEImageGenerator @Inject constructor(
             }
 
             val responseText = response.bodyAsText()
+            AppLogger.d(AppLogger.IMAGEM, "│   📥 [BraveImages/GET] Resposta recebida")
+            AppLogger.d(AppLogger.IMAGEM, "│       HTTP   : ${response.status.value}")
 
             val jsonResponse = json.parseToJsonElement(responseText).jsonObject
 
             val errorCode = jsonResponse["error"]?.jsonObject?.get("code")?.jsonPrimitive?.intOrNull
             if (errorCode != null) {
                 val errorMsg = jsonResponse["error"]?.jsonObject?.get("detail")?.jsonPrimitive?.content
+                AppLogger.d(AppLogger.IMAGEM, "│       Erro   : $errorCode — $errorMsg")
                 AppLogger.imageError("Brave", "Erro $errorCode: $errorMsg", "Unsplash")
                 return searchOnUnsplash(recipeTitle)
             }
 
             val results = jsonResponse["results"]?.jsonArray
+            AppLogger.d(AppLogger.IMAGEM, "│       Resultados: ${results?.size ?: 0}")
 
             if (!results.isNullOrEmpty()) {
                 val culinaryDomains = listOf(
                     "tudogostoso.com.br", "receitasnestle.com.br", "panelinha.com.br",
-                    "cybercook.com.br", "receitasdeprimo.com.br", "receiteria.com.br",
-                    "comidaereceita.com.br", "guiamais.com.br"
+                    "cybercook.com.br", "receiteria.com.br"
                 )
 
                 val culinaryResult = results.firstOrNull { result ->
@@ -92,6 +98,7 @@ class DallEImageGenerator @Inject constructor(
 
                 if (!imageUrl.isNullOrBlank()) {
                     val detail = if (culinaryResult != null) "site culinário" else "resultado geral"
+                    AppLogger.d(AppLogger.IMAGEM, "│       URL selecionada: $imageUrl ($detail)")
                     AppLogger.imageFound("Brave", imageUrl, detail)
                     return imageUrl
                 }

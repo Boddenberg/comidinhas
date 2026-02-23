@@ -32,31 +32,64 @@ class TudoGostosoDetailExtractor(
     private val json: Json
 ) : RecipeDetailExtractor {
 
-    companion object {
-        private const val TAG = "TGDetailExtractor"
-    }
-
     override suspend fun extract(url: String): RecipeDetails? = withContext(Dispatchers.IO) {
         AppLogger.tgExtracting(url)
         try {
-            val html = httpClient.get(url) {
+            AppLogger.d(AppLogger.TUDO_GOSTOSO, "│  📤 [TudoGostoso/GET] Requisição de detalhe")
+            AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      URL: $url")
+
+            val httpResponse = httpClient.get(url) {
                 header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
                 header("Accept-Language", "pt-BR,pt;q=0.9")
-            }.bodyAsText()
+            }
+            val html = httpResponse.bodyAsText()
+
+            AppLogger.d(AppLogger.TUDO_GOSTOSO, "│  📥 [TudoGostoso/GET] Resposta recebida")
+            AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      HTTP   : ${httpResponse.status.value}")
+            AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Tamanho: ${html.length} chars")
 
             val doc: org.jsoup.nodes.Document = org.jsoup.Jsoup.parse(html)
             doc.setBaseUri(url)
 
+            val jsonLdScripts = doc.select("script[type=application/ld+json]").size
+            AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      JSON-LD scripts encontrados: $jsonLdScripts")
+
             val fromJsonLd = tryJsonLd(doc, url)
             if (fromJsonLd != null) {
                 AppLogger.tgExtractedJsonLd(fromJsonLd.title)
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Estratégia : JSON-LD (schema.org/Recipe)")
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Ingredientes: ${fromJsonLd.ingredients.size}")
+                if (fromJsonLd.ingredients.isNotEmpty()) {
+                    AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      1º ingred.  : ${fromJsonLd.ingredients.first()}")
+                }
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Passos      : ${fromJsonLd.steps.size}")
+                if (fromJsonLd.steps.isNotEmpty()) {
+                    val preview = fromJsonLd.steps.first().take(80)
+                    AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      1º passo    : $preview${if (fromJsonLd.steps.first().length > 80) "…" else ""}")
+                }
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Imagem      : ${fromJsonLd.imageUrl ?: "nenhuma"}")
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Tempo       : ${fromJsonLd.timeText ?: "—"}  |  Porções: ${fromJsonLd.yieldText ?: "—"}")
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Avaliação   : ${fromJsonLd.rating ?: "—"} (${fromJsonLd.reviewsCount ?: 0} avaliações)")
                 return@withContext fromJsonLd
             }
 
             AppLogger.d(AppLogger.TUDO_GOSTOSO, "│  ⚠️ JSON-LD não encontrado → tentando HTML fallback")
             val fromHtml = tryHtmlFallback(doc, url)
-            if (fromHtml != null) AppLogger.tgExtractedHtmlFallback(fromHtml.title)
-            else AppLogger.tgError("Nenhuma estratégia funcionou para: $url")
+            if (fromHtml != null) {
+                AppLogger.tgExtractedHtmlFallback(fromHtml.title)
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Estratégia : HTML fallback")
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Ingredientes: ${fromHtml.ingredients.size}")
+                if (fromHtml.ingredients.isNotEmpty()) {
+                    AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      1º ingred.  : ${fromHtml.ingredients.first()}")
+                }
+                AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      Passos      : ${fromHtml.steps.size}")
+                if (fromHtml.steps.isNotEmpty()) {
+                    val preview = fromHtml.steps.first().take(80)
+                    AppLogger.d(AppLogger.TUDO_GOSTOSO, "│      1º passo    : $preview${if (fromHtml.steps.first().length > 80) "…" else ""}")
+                }
+            } else {
+                AppLogger.tgError("Nenhuma estratégia funcionou para: $url")
+            }
             fromHtml
         } catch (e: Exception) {
             AppLogger.tgError("Exceção ao extrair $url: ${e.message}")
@@ -97,12 +130,15 @@ class TudoGostosoDetailExtractor(
         val title = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
 
         val imageUrl = when (val img = obj["image"]) {
-            is JsonPrimitive -> img.contentOrNull
-            is JsonObject    -> img["url"]?.jsonPrimitive?.contentOrNull
-            is JsonArray     -> img.firstOrNull()?.let {
-                if (it is JsonPrimitive) it.contentOrNull
-                else it.jsonObject["url"]?.jsonPrimitive?.contentOrNull
-            }
+            is JsonPrimitive -> img.contentOrNull?.ifBlank { null }
+            is JsonObject    -> img["url"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+            is JsonArray     -> img.mapNotNull { item ->
+                when {
+                    item is JsonPrimitive -> item.contentOrNull?.ifBlank { null }
+                    item is JsonObject    -> item["url"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+                    else -> null
+                }
+            }.firstOrNull { url -> url.isNotBlank() && (url.startsWith("http://") || url.startsWith("https://")) }
             else -> null
         }
 
@@ -155,7 +191,9 @@ class TudoGostosoDetailExtractor(
         val imageUrl = (doc.select(
             "img[class*=recipe], img[class*=receita], img[itemprop=image], " +
             ".recipe-image img, [class*=hero] img, article img"
-        ) as org.jsoup.select.Elements).toList().firstOrNull()?.attr("abs:src")?.ifBlank { null }
+        ) as org.jsoup.select.Elements).toList()
+            .mapNotNull { el -> el.attr("abs:src").ifBlank { null } }
+            .firstOrNull { url -> url.isNotBlank() && (url.startsWith("http://") || url.startsWith("https://")) && !url.contains("placeholder") && !url.contains("blank") }
 
         val ingredients = (doc.select(
             "[itemprop=recipeIngredient], [class*=ingredient], [class*=ingrediente], " +

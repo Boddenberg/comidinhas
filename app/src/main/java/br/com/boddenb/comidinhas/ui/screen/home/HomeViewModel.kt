@@ -3,6 +3,7 @@
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import br.com.boddenb.comidinhas.data.logger.AppLogger
 import br.com.boddenb.comidinhas.domain.model.RecipeItem
 import br.com.boddenb.comidinhas.domain.model.SearchMode
 import br.com.boddenb.comidinhas.domain.usecase.SaveRecipeUseCase
@@ -88,48 +89,94 @@ class HomeViewModel @Inject constructor(
                 }
 
                 val displayQuery = response.query.trim().replaceFirstChar { it.uppercase() }
+
+                // Deduplicate by imageUrl before any save — keep first occurrence (lower index = higher priority)
+                val preFilterDiscarded = mutableListOf<AppLogger.DiscardedRecipe>()
+                val seenImageUrls = mutableSetOf<String>()
+                val deduplicatedCandidates = response.results.filter { item ->
+                    val url = item.imageUrl
+                    if (url.isNullOrBlank()) {
+                        true // no image yet — let save validate
+                    } else if (url in seenImageUrls) {
+                        preFilterDiscarded.add(AppLogger.DiscardedRecipe(item.name, "Imagem duplicada (mesma URL já usada por outra receita)"))
+                        AppLogger.w(AppLogger.BUSCA, "🗑️ [PRÉ-FILTRO] \"${item.name}\" descartada — imagem duplicada: $url")
+                        false
+                    } else {
+                        seenImageUrls.add(url)
+                        true
+                    }
+                }
+
+                // Run saves first — keep isLoading=true so no flash
+                val accepted = mutableListOf<RecipeItem>()
+                val saveDiscarded = mutableListOf<AppLogger.DiscardedRecipe>()
+
+                deduplicatedCandidates.forEach { recipeItem ->
+                    try {
+                        val recipe = Recipe(
+                            id = recipeItem.id,
+                            name = recipeItem.name,
+                            ingredients = recipeItem.ingredients,
+                            instructions = recipeItem.instructions,
+                            imageUrl = recipeItem.imageUrl ?: "",
+                            cookingTime = recipeItem.cookingTime,
+                            servings = recipeItem.servings
+                        )
+                        saveRecipeUseCase(
+                            recipe = recipe,
+                            originalImageUrl = recipeItem.imageUrl,
+                            searchQuery = query.lowercase()
+                        ).onSuccess { supabaseUrl ->
+                            Log.d("HomeViewModel", "✅ Receita salva: ${recipe.name}")
+                            accepted.add(recipeItem.copy(imageUrl = supabaseUrl))
+                        }.onFailure { error ->
+                            val reason = error.message ?: "Falha desconhecida no save"
+                            Log.w("HomeViewModel", "⚠️ Descartando \"${recipe.name}\": $reason")
+                            saveDiscarded.add(AppLogger.DiscardedRecipe(recipeItem.name, reason))
+                        }
+                    } catch (e: Exception) {
+                        val reason = "Exceção inesperada: ${e.message}"
+                        Log.w("HomeViewModel", "⚠️ Erro inesperado ao salvar \"${recipeItem.name}\": ${reason}")
+                        saveDiscarded.add(AppLogger.DiscardedRecipe(recipeItem.name, reason))
+                    }
+                }
+
+                val allDiscarded = preFilterDiscarded + saveDiscarded
+
+                if (allDiscarded.isNotEmpty()) {
+                    AppLogger.w(AppLogger.BUSCA, "╔══════════════════════════════════════════════╗")
+                    AppLogger.w(AppLogger.BUSCA, "║  🗑️ RECEITAS DESCARTADAS: ${allDiscarded.size}")
+                    allDiscarded.forEachIndexed { i, d ->
+                        AppLogger.w(AppLogger.BUSCA, "║  [D${i+1}] \"${d.name}\"")
+                        AppLogger.w(AppLogger.BUSCA, "║       Motivo: ${d.reason}")
+                    }
+                    AppLogger.w(AppLogger.BUSCA, "╚══════════════════════════════════════════════╝")
+                }
+
+                // Recalculate featuredRecipeId from accepted list — original ID may have been discarded
+                val acceptedIds = accepted.map { it.id }.toSet()
+                val recalculatedFeaturedId = when {
+                    response.isGeneric || response.featuredRecipeId == null -> null
+                    response.featuredRecipeId in acceptedIds -> response.featuredRecipeId
+                    else -> {
+                        // Featured was discarded — pick first accepted that matches the query
+                        val q = query.lowercase().trim()
+                        accepted.firstOrNull { it.name.lowercase().contains(q) }?.id
+                            ?: accepted.firstOrNull()?.id
+                    }
+                }
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         displayQuery = displayQuery,
-                        recipes = response.results,
+                        recipes = accepted,
                         isGeneric = response.isGeneric,
-                        featuredRecipeId = response.featuredRecipeId
+                        featuredRecipeId = recalculatedFeaturedId
                     )
                 }
-
-                saveRecipesAutomatically(response.results, query)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Erro ao buscar receitas: ${e.message}") }
-            }
-        }
-    }
-
-    private fun saveRecipesAutomatically(recipeItems: List<RecipeItem>, query: String) {
-        viewModelScope.launch {
-            recipeItems.forEach { recipeItem ->
-                try {
-                    val recipe = Recipe(
-                        id = recipeItem.id,
-                        name = recipeItem.name,
-                        ingredients = recipeItem.ingredients,
-                        instructions = recipeItem.instructions,
-                        imageUrl = recipeItem.imageUrl ?: "",
-                        cookingTime = recipeItem.cookingTime,
-                        servings = recipeItem.servings
-                    )
-                    saveRecipeUseCase(
-                        recipe = recipe,
-                        originalImageUrl = recipeItem.imageUrl,
-                        searchQuery = query.lowercase()
-                    ).onSuccess {
-                        Log.d("HomeViewModel", "✅ Receita salva: ${recipe.name}")
-                    }.onFailure { error ->
-                        Log.w("HomeViewModel", "⚠️ Erro ao salvar receita: ${error.message}")
-                    }
-                } catch (e: Exception) {
-                    Log.w("HomeViewModel", "⚠️ Erro inesperado ao salvar: ${e.message}")
-                }
             }
         }
     }

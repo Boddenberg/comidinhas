@@ -13,9 +13,24 @@ import br.com.boddenb.comidinhas.data.util.TextNormalizer
 import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+
+@Serializable
+private data class RecipeInsertDto(
+    @SerialName("id")           val id: String,
+    @SerialName("name")         val name: String,
+    @SerialName("ingredients")  val ingredients: List<String>,
+    @SerialName("instructions") val instructions: List<String>,
+    @SerialName("imageUrl")     val imageUrl: String?,
+    @SerialName("servings")     val servings: String?,
+    @SerialName("searchQuery")  val searchQuery: String?,
+    @SerialName("cookingTime")  val cookingTime: String?,
+    @SerialName("source")       val source: String?
+)
 
 @Singleton
 class RecipeSupabaseRepository @Inject constructor(
@@ -40,7 +55,17 @@ class RecipeSupabaseRepository @Inject constructor(
                 AppLogger.d(AppLogger.SUPABASE, "📦 Receita já existe (ignorando): \"${recipe.name}\" (id: ${recipe.id})")
                 return@withContext Result.success(Unit)
             }
-            val toInsert = recipe.copy(searchQuery = normalizedQuery)
+            val toInsert = RecipeInsertDto(
+                id           = recipe.id,
+                name         = recipe.name,
+                ingredients  = recipe.ingredients,
+                instructions = recipe.instructions,
+                imageUrl     = recipe.imageUrl,
+                servings     = recipe.servings,
+                searchQuery  = normalizedQuery,
+                cookingTime  = recipe.cookingTime,
+                source       = recipe.source
+            )
             supabase.from(TABLE).insert(toInsert)
             AppLogger.supabaseSaveRecipe(recipe.name, recipe.id)
             Result.success(Unit)
@@ -57,6 +82,22 @@ class RecipeSupabaseRepository @Inject constructor(
             Result.success(recipes)
         } catch (e: Exception) {
             AppLogger.supabaseError("getAllRecipes", e.message ?: "Exceção")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun searchRecipesByName(term: String): Result<List<RecipeEntity>> = withContext(Dispatchers.IO) {
+        try {
+            // Usa o termo original (com acentos) para ilike, pois os nomes no banco preservam acentos
+            val searchTerm = term.trim()
+            AppLogger.d(AppLogger.SUPABASE, "🔎 searchRecipesByName: \"$searchTerm\"")
+            val recipes = supabase.from(TABLE).select {
+                filter { ilike("name", "%$searchTerm%") }
+            }.decodeList<RecipeEntity>()
+            AppLogger.d(AppLogger.SUPABASE, "   └─ ${recipes.size} receita(s) por nome contendo \"$searchTerm\"")
+            Result.success(recipes)
+        } catch (e: Exception) {
+            AppLogger.supabaseError("searchRecipesByName($term)", e.message ?: "Exceção")
             Result.failure(e)
         }
     }
@@ -119,12 +160,42 @@ class RecipeSupabaseRepository @Inject constructor(
                 AppLogger.d(AppLogger.SUPABASE, "🖼️ Imagem já existe no Storage (reutilizando): $existingUrl")
                 return@withContext Result.success(existingUrl)
             }
-            AppLogger.d(AppLogger.SUPABASE, "⬇️ Baixando imagem de: $imageUrl")
-            val connection = java.net.URL(imageUrl).openConnection().apply {
-                connectTimeout = 10000
-                readTimeout = 10000
+
+            AppLogger.d(AppLogger.SUPABASE, "⬇️ Validando URL da imagem: $imageUrl")
+            val httpConn = (java.net.URL(imageUrl).openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
             }
-            val imageBytes = connection.getInputStream().use { it.readBytes() }
+
+            val statusCode = httpConn.responseCode
+            val mimeType = httpConn.contentType?.lowercase() ?: ""
+
+            if (statusCode !in 200..299) {
+                httpConn.disconnect()
+                val msg = "URL retornou HTTP $statusCode para imagem de $recipeId — descartando"
+                AppLogger.supabaseUploadImageFail(path, msg)
+                return@withContext Result.failure(Exception(msg))
+            }
+
+            if (!mimeType.startsWith("image/")) {
+                httpConn.disconnect()
+                val msg = "Content-Type inválido '$mimeType' para imagem de $recipeId — descartando"
+                AppLogger.supabaseUploadImageFail(path, msg)
+                return@withContext Result.failure(Exception(msg))
+            }
+
+            AppLogger.d(AppLogger.SUPABASE, "⬆️ Baixando imagem (HTTP $statusCode, $mimeType)")
+            val imageBytes = httpConn.inputStream.use { it.readBytes() }
+            httpConn.disconnect()
+
+            if (imageBytes.isEmpty()) {
+                val msg = "Resposta vazia ao baixar imagem de $recipeId"
+                AppLogger.supabaseUploadImageFail(path, msg)
+                return@withContext Result.failure(Exception(msg))
+            }
+
             AppLogger.supabaseUploadImageStart(path)
             bucket.upload(path, imageBytes) { contentType = ContentType.Image.JPEG; upsert = false }
             val publicUrl = buildPublicUrl(path)

@@ -11,6 +11,8 @@ interface RecipeRepository {
     suspend fun saveRecipe(recipe: RecipeEntity): Result<Unit>
     suspend fun getAllRecipes(): Result<List<RecipeEntity>>
     suspend fun getRecipesByQuery(query: String): Result<List<RecipeEntity>>
+    /** Busca receitas cujo nome contenha [term] (case-insensitive). */
+    suspend fun searchRecipesByName(term: String): Result<List<RecipeEntity>>
     suspend fun deleteRecipe(recipeId: String): Result<Unit>
     suspend fun uploadRecipeImage(bitmap: Bitmap, recipeId: String): Result<String>
     suspend fun uploadRecipeImageFromUrl(imageUrl: String, recipeId: String): Result<String>

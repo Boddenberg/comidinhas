@@ -77,30 +77,43 @@ class OpenAiClient @Inject constructor(
                 }
             }
 
+            AppLogger.d(AppLogger.VALIDACAO, "┌── 📤 [OpenAI/chat] VALIDAÇÃO DE TERMO")
+            AppLogger.d(AppLogger.VALIDACAO, "│   Endpoint : POST chat/completions")
+            AppLogger.d(AppLogger.VALIDACAO, "│   Modelo   : gpt-4o-mini")
+            AppLogger.d(AppLogger.VALIDACAO, "│   Input    : \"$term\"")
+
             val response: HttpResponse = httpClient.post("chat/completions") {
                 setBody(requestBody)
             }
-            val content = json.parseToJsonElement(response.bodyAsText()).jsonObject["choices"]
+            val rawBody = response.bodyAsText()
+            val content = json.parseToJsonElement(rawBody).jsonObject["choices"]
                 ?.jsonArray?.firstOrNull()
                 ?.jsonObject?.get("message")
                 ?.jsonObject?.get("content")
                 ?.jsonPrimitive?.content?.trim()
 
+            AppLogger.d(AppLogger.VALIDACAO, "│   HTTP     : ${response.status.value}")
+            AppLogger.d(AppLogger.VALIDACAO, "│   Resposta : $content")
+
             if (content != null) {
                 val obj = json.parseToJsonElement(content).jsonObject
                 val isValid = obj["valid"]?.jsonPrimitive?.booleanOrNull ?: true
                 if (isValid) {
+                    AppLogger.d(AppLogger.VALIDACAO, "└── ✅ Resultado: VÁLIDO")
                     TermValidationResult.Valid(term)
                 } else {
                     val reason = obj["reason"]?.jsonPrimitive?.contentOrNull
                         ?: "Termo não reconhecido como receita válida"
+                    AppLogger.d(AppLogger.VALIDACAO, "└── 🚫 Resultado: INVÁLIDO → $reason")
                     TermValidationResult.Invalid(reason)
                 }
             } else {
+                AppLogger.d(AppLogger.VALIDACAO, "└── ⚠️ Resposta vazia — assumindo válido")
                 AppLogger.validationError(term, "Resposta vazia da API de validação")
                 TermValidationResult.Valid(term)
             }
         } catch (e: Exception) {
+            AppLogger.d(AppLogger.VALIDACAO, "└── ❌ Exceção: ${e.message} — assumindo válido")
             AppLogger.validationError(term, e.message ?: "Exceção desconhecida")
             TermValidationResult.Valid(term)
         }
@@ -147,14 +160,23 @@ class OpenAiClient @Inject constructor(
                 }
             }
 
+            AppLogger.d(AppLogger.OPENAI, "┌── 📤 [OpenAI/chat] EXPANSÃO DE QUERY")
+            AppLogger.d(AppLogger.OPENAI, "│   Endpoint : POST chat/completions")
+            AppLogger.d(AppLogger.OPENAI, "│   Modelo   : gpt-4o-mini")
+            AppLogger.d(AppLogger.OPENAI, "│   Input    : \"$term\"")
+
             val response: HttpResponse = httpClient.post("chat/completions") {
                 setBody(requestBody)
             }
-            val content = json.parseToJsonElement(response.bodyAsText()).jsonObject["choices"]
+            val rawBody = response.bodyAsText()
+            val content = json.parseToJsonElement(rawBody).jsonObject["choices"]
                 ?.jsonArray?.firstOrNull()
                 ?.jsonObject?.get("message")
                 ?.jsonObject?.get("content")
                 ?.jsonPrimitive?.content?.trim()
+
+            AppLogger.d(AppLogger.OPENAI, "│   HTTP     : ${response.status.value}")
+            AppLogger.d(AppLogger.OPENAI, "│   Resposta : $content")
 
             if (content != null) {
                 val obj = json.parseToJsonElement(content).jsonObject
@@ -164,13 +186,16 @@ class OpenAiClient @Inject constructor(
                     ?.mapNotNull { it.jsonPrimitive.contentOrNull }
                     ?.filter { it.isNotBlank() }
                     ?: listOf(term)
-                AppLogger.d(AppLogger.OPENAI, "│  🔍 Expansão: genérico=$isGeneric termGenérico=$genericTerm variações=${variations.size}")
+                AppLogger.d(AppLogger.OPENAI, "│   genérico=${isGeneric} raiz=\"${genericTerm}\"")
+                AppLogger.d(AppLogger.OPENAI, "│   variações(${variations.size}): ${variations.joinToString(", ")}")
+                AppLogger.d(AppLogger.OPENAI, "└── ✅ Expansão concluída")
                 QueryExpansion(isGeneric = isGeneric, genericTerm = genericTerm, variations = variations)
             } else {
+                AppLogger.d(AppLogger.OPENAI, "└── ⚠️ Resposta vazia — usando termo original")
                 QueryExpansion(isGeneric = false, genericTerm = null, variations = listOf(term))
             }
         } catch (e: Exception) {
-            AppLogger.d(AppLogger.OPENAI, "│  ⚠️ expandQuery falhou (${e.message}), usando termo original")
+            AppLogger.d(AppLogger.OPENAI, "└── ❌ expandQuery falhou (${e.message}) — usando termo original")
             QueryExpansion(isGeneric = false, genericTerm = null, variations = listOf(term))
         }
     }
@@ -181,7 +206,7 @@ class OpenAiClient @Inject constructor(
      * Gera receitas para o [query] via GPT-4o com Structured Output.
      * Retorna [RecipeSearchResponse] sem imagens (busca de imagem é responsabilidade do UseCase).
      */
-    suspend fun generateRecipes(query: String): RecipeSearchResponse {
+    suspend fun generateRecipes(query: String, maxResults: Int = 3): RecipeSearchResponse {
         val schemaJson: JsonElement = buildJsonObject {
             put("\$schema", "http://json-schema.org/draft-07/schema#")
             put("type", "object")
@@ -190,7 +215,7 @@ class OpenAiClient @Inject constructor(
             putJsonObject("properties") {
                 putJsonObject("query") { put("type", "string") }
                 putJsonObject("results") {
-                    put("type", "array"); put("maxItems", 3)
+                    put("type", "array"); put("maxItems", maxResults)
                     putJsonObject("items") {
                         put("type", "object"); put("additionalProperties", false)
                         putJsonArray("required") {
@@ -226,6 +251,9 @@ class OpenAiClient @Inject constructor(
         """.trimIndent()
 
         AppLogger.openAiSendRequest(model, query)
+        AppLogger.d(AppLogger.OPENAI, "│   Endpoint : POST responses")
+        AppLogger.d(AppLogger.OPENAI, "│   Modelo   : $model")
+        AppLogger.d(AppLogger.OPENAI, "│   MaxResult: $maxResults")
 
         val resp = try {
             postResponses(
@@ -255,7 +283,18 @@ class OpenAiClient @Inject constructor(
             val response = json.decodeFromString(RecipeSearchResponse.serializer(), payload)
             val unique = response.results.distinctBy { it.name.lowercase().trim() }
             AppLogger.openAiReceived(unique.size)
-            unique.forEachIndexed { i, r -> AppLogger.openAiRecipe(i + 1, r.name, r.ingredients.size, r.instructions.size) }
+            unique.forEachIndexed { i, r ->
+                AppLogger.openAiRecipe(i + 1, r.name, r.ingredients.size, r.instructions.size)
+                AppLogger.d(AppLogger.OPENAI, "│       Tempo    : ${r.cookingTime ?: "—"}  |  Porções: ${r.servings ?: "—"}")
+                if (r.ingredients.isNotEmpty()) {
+                    AppLogger.d(AppLogger.OPENAI, "│       1º ingred.: ${r.ingredients.first()}")
+                }
+                if (r.instructions.isNotEmpty()) {
+                    val preview = r.instructions.first().take(80)
+                    AppLogger.d(AppLogger.OPENAI, "│       1º passo : $preview${if (r.instructions.first().length > 80) "…" else ""}")
+                }
+                AppLogger.d(AppLogger.OPENAI, "│       Origem   : OpenAI Responses API (structured output)")
+            }
             AppLogger.openAiSuccess(unique.size)
             response.copy(results = unique)
         }.getOrElse { e ->
