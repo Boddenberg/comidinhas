@@ -92,7 +92,6 @@ fun DetailsScreen(
                     .fillMaxSize()
                     .padding(paddingValues),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
-                // garante que o último item não fique atrás do FAB
                 contentPadding = PaddingValues(bottom = Spacing.xxl)
             ) {
 
@@ -101,47 +100,41 @@ fun DetailsScreen(
 
                 // ── Bloco 2: Ingredientes ──────────────────────────────
                 item {
-                    AnimatedVisibility(
-                        visible = sectionsVisible,
-                        enter = fadeIn(tween(350)) + slideInVertically(
-                            initialOffsetY = { it / 6 },
-                            animationSpec = tween(400, easing = EaseOutQuart)
+                    val ingredientsAlpha by animateFloatAsState(
+                        targetValue = if (sectionsVisible) 1f else 0f,
+                        animationSpec = tween(350),
+                        label = "ingredientsAlpha"
+                    )
+                    ContentBlock {
+                        IngredientsCard(
+                            ingredients = recipe.ingredients,
+                            checkedMap = checkedIngredients,
+                            onToggle = { index ->
+                                checkedIngredients[index] = !(checkedIngredients[index] ?: false)
+                            },
+                            modifier = Modifier.alpha(ingredientsAlpha)
                         )
-                    ) {
-                        ContentBlock {
-                            IngredientsCard(
-                                ingredients = recipe.ingredients,
-                                checkedMap = checkedIngredients,
-                                onToggle = { index ->
-                                    checkedIngredients[index] = !(checkedIngredients[index] ?: false)
-                                }
-                            )
-                        }
                     }
                 }
 
                 // ── Bloco 3: Modo de preparo ───────────────────────────
                 item {
-                    AnimatedVisibility(
-                        visible = sectionsVisible,
-                        enter = fadeIn(tween(400)) + slideInVertically(
-                            initialOffsetY = { it / 6 },
-                            animationSpec = tween(450, easing = EaseOutQuart)
+                    val stepsAlpha by animateFloatAsState(
+                        targetValue = if (sectionsVisible) 1f else 0f,
+                        animationSpec = tween(450),
+                        label = "stepsAlpha"
+                    )
+                    ContentBlock(topPadding = Spacing.blockGap) {
+                        StepsTimelineCard(
+                            steps = recipe.instructions,
+                            selectedIndex = activeStep,
+                            onSelect = { index ->
+                                activeStep = if (activeStep == index) -1 else index
+                            },
+                            modifier = Modifier.alpha(stepsAlpha)
                         )
-                    ) {
-                        ContentBlock(topPadding = 0.dp) {
-                            StepsTimelineCard(
-                                steps = recipe.instructions,
-                                selectedIndex = activeStep,
-                                onSelect = { index ->
-                                    activeStep = if (activeStep == index) -1 else index
-                                }
-                            )
-                        }
                     }
                 }
-
-                // ── Rodapé de respiro (coberto pelo contentPadding do LazyColumn) ──
             }
         }
 
@@ -330,7 +323,8 @@ private fun HeroStatChip(
 fun IngredientsCard(
     ingredients: List<String>,
     checkedMap: androidx.compose.runtime.snapshots.SnapshotStateMap<Int, Boolean>,
-    onToggle: (Int) -> Unit
+    onToggle: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val checkedCount = checkedMap.values.count { it }
 
@@ -351,7 +345,7 @@ fun IngredientsCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -558,10 +552,11 @@ fun IngredientRow(ingredient: String, isChecked: Boolean, onClick: () -> Unit) {
 fun StepsTimelineCard(
     steps: List<String>,
     selectedIndex: Int,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)

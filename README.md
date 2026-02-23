@@ -92,22 +92,28 @@ app/src/main/java/br/com/boddenb/comidinhas/
 
 ```mermaid
 flowchart TD
-    A["🔍 Usuário digita ex: &quot;pastel&quot;"] --> B{"1️⃣ Cache em memória?"}
+    A["🔍 Usuário digita ex: &quot;pastel&quot;"] --> A1["0️⃣ Correção de termo\n(TermCorrectionService: 'lasanhe' → 'lasanha')"]
+    A1 --> B{"1️⃣ Cache em memória?"}
     B -- Sim --> Z["⚡ Retorna instantâneo"]
-    B -- Não --> C["2️⃣ GPT classifica o termo"]
-    C --> |"genérico"| C1["Gera variações: pastel de queijo, carne …"]
-    C --> |"específico"| C2["Mantém + sugere similares"]
-    C1 --> D{"3️⃣ Supabase"}
+    B -- Não --> C["2️⃣ GPT expande a query\n(expandQuery)"]
+    C --> |"genérico"| C1["Gera variações:\npastel de queijo, carne …"]
+    C --> |"específico"| C2["Mantém + raiz genérica\npara busca no banco"]
+    C1 --> D{"3️⃣ Supabase\n(busca por search_query\ne pelo raiz genérico)"}
     C2 --> D
-    D -- Encontrou --> Z2["📦 Retorna do banco"]
-    D -- Não encontrou --> E["4️⃣ TudoGostoso scraping"]
-    E -- Encontrou --> F["🖼️ Busca imagem"]
-    E -- Não encontrou --> G["5️⃣ Valida termo com GPT-4o-mini"]
-    G -- Válido --> H["6️⃣ Gera receita com GPT-4o"]
-    G -- Inválido --> X["❌ Termo descartado"]
-    H --> F
-    F --> I["💾 Salva no Supabase"]
-    I --> J["✅ Retorna lista para o usuário"]
+    D -- "≥ 3 receitas" --> Z2["📦 Retorna do banco"]
+    D -- "< 3 receitas" --> E["4️⃣ TudoGostoso scraping\n(busca variações em paralelo)"]
+    E -- "< 2 resultados" --> E2["🔁 Fallback: busca candidatos\npelo raiz genérico no TudoGostoso"]
+    E2 --> EC["Combina Supabase + TudoGostoso"]
+    E -- "resultados" --> EC
+    EC -- "≥ 3 combinados" --> F["🖼️ Busca imagem por item\n(TudoGostoso scraping → Brave → Unsplash)"]
+    EC -- "< 3 combinados" --> G["5️⃣ Valida termo com GPT-4o-mini"]
+    G -- Válido --> H["6️⃣ Gera receitas faltantes\ncom GPT-4o\n(só as variações ainda ausentes)"]
+    G -- "Inválido (sem resultados)" --> X["❌ Termo descartado\n(errorMessage ao usuário)"]
+    G -- "Inválido (há algum resultado)" --> F
+    H --> HF["🖼️ Busca imagem por item\n(Brave → Unsplash)"]
+    HF --> I["💾 Salva no Supabase\n(valida URL da imagem antes do upload)"]
+    F --> I
+    I --> J["✅ Retorna lista para o usuário\n(com card de destaque se busca específica)"]
 ```
 
 <br/>
@@ -285,6 +291,14 @@ git clone https://github.com/Boddenberg/comidinhas.git
 <br/>
 
 ## 📋 Changelog
+
+<details>
+<summary><b>v1.7</b> — Ajuste de espaçamento na tela de detalhes</summary>
+
+- Espaço entre o card de ingredientes e o card de modo de preparo reduzido (`blockGap` 24dp → 14dp)
+- Leitura mais fluida na tela de detalhes sem scroll excessivo entre seções
+
+</details>
 
 <details>
 <summary><b>v1.6</b> — Qualidade de resultado: imagem obrigatória, deduplicação e logs</summary>

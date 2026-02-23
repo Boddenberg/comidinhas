@@ -12,7 +12,7 @@ object Spacing {
 
     val screenHorizontal = 20.dp
     val sectionGap       = 32.dp
-    val blockGap         = 24.dp
+    val blockGap         = 14.dp
     val itemGap          = 16.dp
     val cardPaddingV     = 6.dp
 }
