@@ -97,7 +97,7 @@ Usuário digita "pastel"
         │ Não encontrou
         ▼
   5. Valida termo com GPT-4o-mini
-     (filtra: "bolinho de merda", "macarrão de concreto", etc.)
+     (filtra: "bolinho de plastico", "macarrão de concreto", etc.)
         │ Termo válido
         ▼
   6. Gera receita com GPT-4o (Structured Output)
